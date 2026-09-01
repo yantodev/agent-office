@@ -132,6 +132,28 @@ Roadmap ini disusun dari percakapan pada [ChatGPT share](https://chatgpt.com/sha
 2. Uji migrasi database serta native modules pada OS/arsitektur target.
 3. Hardening GitHub sync, PR result/test summary, dan recovery lintas crash scenario.
 
+## Rekomendasi update aplikasi berikutnya
+
+### Prioritas P0 — Reliability dan security
+
+- [ ] Buat Git compatibility gate dan fallback PR preflight. `git merge-tree --write-tree` yang dipakai saat ini tidak tersedia pada Git 2.34.1, sehingga `npm run smoke:main` gagal di tahap persiapan PR; dukung versi Git yang lebih luas atau tampilkan error prerequisite yang jelas.
+- [ ] Tegakkan permission profile secara nyata. Saat ini `filesystem`, `network`, dan `git` terutama dikirim sebagai environment flag; tambahkan enforcement melalui sandbox/allowlist dan uji bahwa agent tidak dapat melewati policy.
+- [ ] Hardening seluruh IPC dan konfigurasi: validasi sender, batasi path config/artifact ke workspace atau allowlist eksplisit, cek ulang symlink saat apply, dan jaga konsistensi transaksi antara file system dan SQLite.
+- [ ] Formalisasi task state machine dan dispatcher: validasi transisi status, otomatis membuka task setelah dependency selesai, cegah duplicate run, serta pulihkan retry/resume secara durable setelah crash.
+
+### Prioritas P1 — Maintainability dan observability
+
+- [ ] Pecah `src/main/index.ts` menjadi modul schema/migration, persistence, PTY, GitHub, mailbox, scheduler, memory, dan IPC agar perubahan dapat diuji serta direview per boundary.
+- [ ] Tambahkan event subscription atau polling terkontrol untuk task, mailbox, approval, memory, dan office floor; saat ini sebagian tampilan baru berubah setelah refresh manual atau lifecycle agent.
+- [ ] Tambahkan unit/integration test terisolasi untuk redaction, lifecycle task, permission, path traversal/symlink, Git preflight, scheduler, dan race condition mailbox; pertahankan smoke test sebagai test end-to-end.
+- [ ] Tambahkan validasi input dan error UX di renderer. Banyak handler async dipanggil tanpa `try/catch`, sehingga error IPC dapat menjadi unhandled rejection dan tidak memberi feedback ke pengguna.
+
+### Prioritas P2 — Provider dan release readiness
+
+- [ ] Implementasikan adapter provider-specific untuk Codex, OpenCode, Claude, Gemini, Qwen, dan Copilot agar SOUL/task prompt, steer, interrupt, dan permission tidak hanya bergantung pada environment variable generik.
+- [ ] Lengkapi verifikasi native module dan packaging pada runner Windows/macOS, termasuk pause/resume yang saat ini POSIX-only dan smoke test GitHub CLI yang authenticated.
+- [ ] Tambahkan telemetry lokal yang aman untuk durasi task, ukuran output, dan alasan kegagalan tanpa menyimpan secret, serta dokumentasikan retention/backup database dan `.agent-office/`.
+
 ## Keputusan yang perlu dikunci
 
 - [x] Runtime MVP tetap memakai `node-pty`; tmux persistent ditunda.
