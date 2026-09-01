@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { TerminalPanel } from './components/TerminalPanel'
 import { OfficeFloor } from './components/OfficeFloor'
+import logoLandscapeUrl from '../../../assets/logo/logo-landscape.png?url'
 import './styles/app.css'
 
 const defaultPermissions = { filesystem: true, network: true, shell: true, git: true, secrets: false }
@@ -459,7 +460,7 @@ function App() {
 
   return <div className="app-shell">
     <aside className="sidebar">
-      <div className="brand"><div className="brand-mark">AO</div><div><b>Agent Office</b><span>Local multi-agent control</span></div></div>
+      <div className="brand"><img className="brand-logo" src={logoLandscapeUrl} alt="Agent Office" /></div>
       <nav>
         <button className={`nav ${view === 'dashboard' ? 'active' : ''}`} onClick={() => setView('dashboard')}>Dashboard</button>
         <button className={`nav ${view === 'floor' ? 'active' : ''}`} onClick={() => setView('floor')}>Office Floor</button>

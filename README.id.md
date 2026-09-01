@@ -1,0 +1,167 @@
+# Agent Office
+
+Workspace desktop local-first untuk menjalankan, mengoordinasikan, dan memantau banyak coding agent dalam pixel-art office yang interaktif.
+
+[English documentation](README.md)
+
+## Ringkasan
+
+Agent Office adalah aplikasi desktop Electron untuk developer yang bekerja dengan beberapa coding CLI secara bersamaan. Aplikasi ini menggabungkan registry agent yang persisten, pseudo-terminal nyata, koordinasi task, project workspace, dan office floor berbasis Pixi.js dalam satu pengalaman local-first.
+
+Data project dan state koordinasi disimpan di komputer lokal. Integrasi dengan Git, GitHub CLI, dan provider coding agent dapat digunakan secara opsional.
+
+## Fitur
+
+### Operasional agent
+
+- Mendeteksi coding CLI yang terpasang, termasuk Codex, OpenCode, Claude, Gemini, Qwen, dan Copilot.
+- Membuat profile reusable dengan role, command, dan instruksi SOUL/system.
+- Menjalankan setiap agent dalam pseudo-terminal nyata menggunakan `node-pty`.
+- Menampilkan output terminal interaktif melalui xterm.js.
+- Melakukan steer, interrupt, pause, resume, atau stop pada agent.
+- Memulihkan state agent setelah process crash.
+- Menerapkan permission profile, execution budget, dan secret redaction.
+
+### Koordinasi project dan task
+
+- Mengelola project dan Git worktree opsional untuk setiap agent.
+- Menggunakan task board persisten dengan metadata assignment, retry, dependency, branch, artifact, result, error, dan review.
+- Memecah mission secara deterministik dan mendistribusikan pekerjaan melalui orchestrator Michael.
+- Menjadwalkan heartbeat dan pekerjaan berulang secara lokal dengan kontrol pause/resume.
+- Mengirim pesan durable melalui atomic mailbox dengan retry dan dead-letter handling.
+- Melindungi branch worker menggunakan single-committer lock.
+- Meminta persetujuan manusia untuk request yang berpotensi destructive, mengubah scope, atau menimbulkan biaya.
+
+### Office interaktif
+
+- Menjelajahi office floor berbasis Pixi.js dengan avatar animasi yang mengikuti status agent.
+- Melihat workstation setiap agent, termasuk composite desk, monitor, keyboard, CPU, kursi, dan lampu meja.
+- Mengamati animasi message envelope dan aktivitas agent secara langsung.
+- Menggunakan navigasi office untuk membuka Live Office, Selected Agent, dan Terminal.
+
+### Memory dan integrasi
+
+- Menyimpan pengetahuan bersama dalam Markdown dengan pencarian SQLite FTS5.
+- Menandai dan mempertahankan memory penting.
+- Menggunakan deterministic local vector search secara opsional.
+- Mengimpor GitHub issue dan menyiapkan atau membuat pull request melalui workflow `gh` yang memerlukan approval.
+- Menyimpan append-only activity log dan workflow settings diff yang sudah di-redact, memiliki backup, serta atomic replacement.
+
+## Tech stack
+
+- Electron 41
+- React 19 dan TypeScript
+- Pixi.js 8 untuk office floor interaktif
+- xterm.js untuk rendering terminal
+- SQLite melalui `better-sqlite3`
+- `node-pty` untuk pseudo-terminal lokal
+- Vite dan electron-vite untuk development dan bundling
+- electron-builder untuk package AppImage, NSIS, dan DMG
+
+## Arsitektur
+
+| Layer | Tanggung jawab |
+| --- | --- |
+| Main process | Persistence SQLite, lifecycle PTY, operasi filesystem dan Git, scheduler, koordinasi, serta integrasi |
+| Preload | IPC bridge yang typed dan dibatasi antara process Electron |
+| Renderer | Interface React, navigasi, dashboard, terminal view, dan visualisasi office Pixi.js |
+| Local storage | Registry agent, state task, mailbox, event, schedule, dan memory Markdown |
+
+## Persyaratan
+
+- Node.js 22 atau lebih baru direkomendasikan.
+- npm 10 atau lebih baru direkomendasikan.
+- Git untuk fitur project dan worktree.
+- Opsional: GitHub CLI (`gh`) yang sudah authenticated untuk workflow GitHub.
+- Build tools native Linux untuk `node-pty` dan `better-sqlite3`:
+
+```bash
+sudo apt install -y build-essential python3
+```
+
+## Memulai development
+
+```bash
+git clone git@github.com:yantodev/agent-office.git
+cd agent-office
+npm install
+npm run dev
+```
+
+Command development akan menjalankan Vite renderer dan membuka aplikasi Electron.
+
+## Script yang tersedia
+
+| Command | Deskripsi |
+| --- | --- |
+| `npm run dev` | Menjalankan environment development Electron |
+| `npm run typecheck` | Menjalankan TypeScript compiler tanpa membuat file output |
+| `npm run build` | Membuild bundle main, preload, dan renderer |
+| `npm run smoke:native` | Memverifikasi native dependency dan runtime |
+| `npm run smoke:main` | Menjalankan integration smoke test main process |
+| `npm run smoke:migration` | Memverifikasi behavior database migration |
+| `npm run dist` | Membuild dan package untuk platform saat ini |
+| `npm run dist:linux` | Membuat Linux AppImage |
+| `npm run dist:win` | Membuat installer Windows NSIS |
+| `npm run dist:mac` | Membuat macOS DMG |
+
+Sebelum membuat pull request, jalankan:
+
+```bash
+npm run typecheck
+npm run smoke:native
+npm run smoke:main
+npm run smoke:migration
+npm run build
+```
+
+## Troubleshooting Linux
+
+Beberapa instalasi Linux memerlukan owner dan permission setuid yang benar untuk sandbox helper Electron. Jika Electron berhenti dengan error konfigurasi `chrome-sandbox`, jalankan command berikut satu kali dari dalam project:
+
+```bash
+sudo chown root:root node_modules/electron/dist/chrome-sandbox
+sudo chmod 4755 node_modules/electron/dist/chrome-sandbox
+```
+
+Setelah itu jalankan aplikasi sebagai user biasa. Pada environment CI headless, `ELECTRON_DISABLE_GPU=1` dapat digunakan jika tidak tersedia GPU yang usable.
+
+## Membuat release
+
+Application identifier yang digunakan adalah `com.agentoffice.desktop`. Icon Electron default dimuat dari `assets/logo/logo.png`, sedangkan logo landscape untuk sidebar berada di `assets/logo/logo-landscape.png`.
+
+Artifact build dibuat di `dist/` dan sengaja diabaikan oleh Git.
+
+## Kontribusi
+
+Kontribusi sangat terbuka. Untuk mengusulkan perubahan:
+
+1. Fork repository dan buat branch yang fokus pada satu perubahan.
+2. Jaga scope perubahan tetap jelas dan perbarui dokumentasi jika behavior berubah.
+3. Jalankan typecheck, smoke test, dan build seperti yang tercantum di atas.
+4. Buat pull request dengan deskripsi singkat, langkah validasi, dan screenshot untuk perubahan UI.
+
+Jangan commit credential, token, local settings, bundle hasil build, atau file database. Ikuti konvensi TypeScript yang sudah ada dan utamakan perubahan kecil yang mudah direview.
+
+## Contributor
+
+| Contributor | Peran |
+| --- | --- |
+| [Yanto (@yantodev)](https://github.com/yantodev) | Creator dan maintainer |
+
+Contributor tambahan dipersilakan melalui pull request.
+
+## Keamanan
+
+Jangan menaruh API key, GitHub PAT, atau credential lain di source code, issue, commit, atau pull request. Gunakan konfigurasi environment lokal dan segera revoke credential jika tidak sengaja terekspos.
+
+## Lisensi
+
+Belum ada file lisensi yang dipublikasikan. Sebelum lisensi ditambahkan, seluruh hak tetap berada pada pemilik repository.
+
+## Referensi project
+
+- [Changelog](CHANGELOG.md)
+- [Release checklist](RELEASE.md)
+- [Domain context](CONTEXT.md)
+- [Planned work](TODO.md)

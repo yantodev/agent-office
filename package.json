@@ -22,6 +22,7 @@
   "build": {
     "appId": "com.agentoffice.desktop",
     "productName": "Agent Office",
+    "icon": "assets/logo/logo.png",
     "linux": {
       "category": "Development",
       "syncDesktopName": true,
