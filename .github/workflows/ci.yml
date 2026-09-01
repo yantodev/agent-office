@@ -1,0 +1,55 @@
+name: Agent Office CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate ${{ matrix.os }}
+    fail-fast: false
+    timeout-minutes: 30
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run smoke:native
+      - run: npm run smoke:main
+      - run: npm run smoke:migration
+      - run: npm run build
+      - run: npm run dist:linux
+        if: matrix.os == 'ubuntu-latest'
+      - run: npm run dist:win
+        if: matrix.os == 'windows-latest'
+      - run: npm run dist:mac
+        if: matrix.os == 'macos-latest'
+      - uses: actions/upload-artifact@v4
+        if: matrix.os == 'ubuntu-latest'
+        with:
+          name: agent-office-linux
+          path: dist/*.AppImage
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: matrix.os == 'windows-latest'
+        with:
+          name: agent-office-windows
+          path: dist/*.exe
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: matrix.os == 'macos-latest'
+        with:
+          name: agent-office-macos
+          path: dist/*.dmg
+          if-no-files-found: error

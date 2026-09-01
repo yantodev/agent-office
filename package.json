@@ -1,0 +1,64 @@
+{
+  "name": "agent-office",
+  "version": "1.0.0",
+  "private": true,
+  "author": "Agent Office contributors",
+  "desktopName": "Agent Office",
+  "description": "Local-first multi-agent desktop office for coding CLIs",
+  "main": "out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "typecheck": "tsc --noEmit",
+    "smoke:native": "node scripts/native-smoke.cjs",
+    "smoke:main": "node scripts/main-smoke.cjs",
+    "smoke:migration": "node scripts/migration-smoke.cjs",
+    "dist": "npm run build && electron-builder",
+    "dist:linux": "npm run build && electron-builder --linux AppImage",
+    "dist:win": "npm run build && electron-builder --win nsis",
+    "dist:mac": "npm run build && electron-builder --mac dmg",
+    "postinstall": "electron-builder install-app-deps"
+  },
+  "build": {
+    "appId": "com.agentoffice.desktop",
+    "productName": "Agent Office",
+    "linux": {
+      "category": "Development",
+      "syncDesktopName": true,
+      "target": [
+        "AppImage"
+      ]
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ]
+    }
+  },
+  "dependencies": {
+    "@xterm/addon-fit": "^0.10.0",
+    "@xterm/xterm": "^5.5.0",
+    "better-sqlite3": "^13.0.3",
+    "node-pty": "^1.0.0",
+    "pixi.js": "^8.20.1",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^41.10.3",
+    "electron-builder": "^26.0.12",
+    "electron-vite": "^3.1.0",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.7"
+  }
+}

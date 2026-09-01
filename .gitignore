@@ -1,0 +1,7 @@
+node_modules/
+out/
+dist/
+.agent-office/
+settings.local.json
+*.log
+.DS_Store
