@@ -17,13 +17,14 @@ env:
 
 jobs:
   validate:
-    name: Validate / ${{ matrix.os }}
+    name: Validate / ${{ matrix.platform }}
     fail-fast: false
     timeout-minutes: 30
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
+        platform: [linux, windows, macos]
+    # Self-hosted runner wajib memiliki label "self-hosted" dan label OS yang sesuai.
+    runs-on: [self-hosted, "${{ matrix.platform }}"]
     steps:
       - uses: actions/checkout@v4
 
@@ -56,21 +57,22 @@ jobs:
       matrix:
         include:
           - name: Linux AppImage
-            os: ubuntu-latest
+            platform: linux
             command: npm run dist:linux
             artifact: agent-office-linux
             path: dist/*.AppImage
           - name: Windows NSIS
-            os: windows-latest
+            platform: windows
             command: npm run dist:win
             artifact: agent-office-windows
             path: dist/*.exe
           - name: macOS DMG
-            os: macos-latest
+            platform: macos
             command: npm run dist:mac
             artifact: agent-office-macos
             path: dist/*.dmg
-    runs-on: ${{ matrix.os }}
+    # Self-hosted runner wajib memiliki label "self-hosted" dan label OS yang sesuai.
+    runs-on: [self-hosted, "${{ matrix.platform }}"]
     steps:
       - uses: actions/checkout@v4
 
