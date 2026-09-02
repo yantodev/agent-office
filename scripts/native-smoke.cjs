@@ -8,8 +8,27 @@ const code = `
   if (db.prepare('SELECT 1 AS ok').get().ok !== 1) process.exit(2)
   const term = pty.spawn(process.platform === 'win32' ? 'cmd.exe' : '/bin/sh', process.platform === 'win32' ? ['/c', 'echo native-smoke'] : ['-lc', 'printf native-smoke'], { name: 'xterm', cols: 80, rows: 24 })
   let output = ''
+  let finished = false
+  const timeout = setTimeout(() => {
+    if (finished) return
+    finished = true
+    term.kill()
+    db.close()
+    process.exit(4)
+  }, 10_000)
+  const finish = code => {
+    if (finished) return
+    finished = true
+    clearTimeout(timeout)
+    db.close()
+    process.exit(code)
+  }
   term.onData(data => { output += data })
-  term.onExit(() => { if (!output.includes('native-smoke')) process.exit(3); console.log('native modules: ok') })
+  term.onExit(() => {
+    if (!output.includes('native-smoke')) return finish(3)
+    console.log('native modules: ok')
+    finish(0)
+  })
 `
 
 const result = spawnSync(electron, ['-e', code], {
