@@ -10,6 +10,7 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "typecheck": "tsc --noEmit",
+    "smoke:unit": "node --experimental-strip-types scripts/unit-smoke.mjs",
     "smoke:native": "node scripts/native-smoke.cjs",
     "smoke:main": "node scripts/main-smoke.cjs",
     "smoke:migration": "node scripts/migration-smoke.cjs",

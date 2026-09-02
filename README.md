@@ -96,6 +96,7 @@ The development command starts the Vite renderer and launches the Electron appli
 | --- | --- |
 | `npm run dev` | Start the Electron development environment |
 | `npm run typecheck` | Run the TypeScript compiler without emitting files |
+| `npm run smoke:unit` | Run isolated security, lifecycle, policy, and atomic persistence tests |
 | `npm run build` | Build the main, preload, and renderer bundles |
 | `npm run smoke:native` | Verify native dependencies and runtime behavior |
 | `npm run smoke:main` | Run main-process integration smoke tests |
@@ -109,6 +110,7 @@ Before opening a pull request, run:
 
 ```bash
 npm run typecheck
+npm run smoke:unit
 npm run smoke:native
 npm run smoke:main
 npm run smoke:migration

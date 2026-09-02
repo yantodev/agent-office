@@ -9,6 +9,8 @@ import Database from 'better-sqlite3'
 import { assertTaskTransition, isTaskStatus, resolveTaskReadiness } from './task-lifecycle'
 import type { BlockedReason, TaskStatus } from './task-lifecycle'
 import { executionPlan } from './permission-policy'
+import { canonicalPath, isCanonicalPathInside, redactSecrets } from './security'
+import { writeJsonAtomic, writeTextAtomic } from './persistence'
 
 type AgentStatus = 'idle' | 'working' | 'paused' | 'error' | 'offline'
 
@@ -156,24 +158,6 @@ function parsePermissions(value?: string): ProfilePermissions {
   try { return normalizePermissions(value ? JSON.parse(value) : {}) } catch { return { ...defaultProfilePermissions } }
 }
 
-function canonicalPath(path: string) {
-  let current = resolve(path)
-  const tail: string[] = []
-  while (!fs.existsSync(current)) {
-    const parent = dirname(current)
-    if (parent === current) return resolve(path)
-    tail.unshift(basename(current))
-    current = parent
-  }
-  try { return join(fs.realpathSync.native(current), ...tail) } catch { return resolve(path) }
-}
-
-function isCanonicalPathInside(parent: string, candidate: string) {
-  const root = canonicalPath(parent).replace(/[\\/]$/, '')
-  const target = canonicalPath(candidate)
-  return target === root || target.startsWith(`${root}${target.includes('\\') ? '\\' : '/'}`)
-}
-
 function projectConfigRoots(project: Project) {
   const home = os.homedir()
   return [
@@ -271,13 +255,6 @@ function safePathSegment(value: string) {
   return value.replace(/[^A-Za-z0-9._-]/g, '-').replace(/^[.-]+|[.-]+$/g, '').slice(0, 64) || 'workspace'
 }
 
-function redactSecrets(value: string) {
-  return value
-    .replace(/\b(?:sk-[A-Za-z0-9_-]{12,}|gh[pousr]_[A-Za-z0-9_]{12,}|xox[baprs]-[A-Za-z0-9-]{12,})\b/g, '[REDACTED_SECRET]')
-    .replace(/\b((?:api[_-]?key|access[_-]?token|refresh[_-]?token|password|secret|credential|token)\s*[:=]\s*)([^\s,;]+)/gi, '$1[REDACTED]')
-    .replace(/((?:["']?\b(?:api[_-]?key|access[_-]?token|refresh[_-]?token|password|secret|credential|token)\b["']?)\s*[:=]\s*["']?)([^"'\s,;}]+)(["']?)/gi, '$1[REDACTED]$3')
-}
-
 function redactPayload(value: unknown): unknown {
   if (typeof value === 'string') return redactSecrets(value)
   if (Array.isArray(value)) return value.map(redactPayload)
@@ -345,18 +322,6 @@ function ensureProjectWorkspace(project: Project) {
   const root = join(project.path, '.agent-office')
   for (const folder of projectFolders) fs.mkdirSync(join(root, folder), { recursive: true })
   return root
-}
-
-function writeJsonAtomic(path: string, value: unknown) {
-  const temporaryPath = `${path}.${randomUUID()}.tmp`
-  fs.writeFileSync(temporaryPath, JSON.stringify(value, null, 2), 'utf8')
-  fs.renameSync(temporaryPath, path)
-}
-
-function writeTextAtomic(path: string, value: string) {
-  const temporaryPath = `${path}.${randomUUID()}.tmp`
-  fs.writeFileSync(temporaryPath, value, 'utf8')
-  fs.renameSync(temporaryPath, path)
 }
 
 function routePendingMessages(project: Project) {

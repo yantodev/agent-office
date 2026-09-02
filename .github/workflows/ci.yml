@@ -43,6 +43,7 @@ jobs:
 
       - run: npm ci
       - run: npm run typecheck
+      - run: npm run smoke:unit
       - run: npm run smoke:native
       - run: npm run smoke:main
       - run: npm run smoke:migration
