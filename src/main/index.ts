@@ -13,6 +13,7 @@ import { canonicalPath, isCanonicalPathInside, redactSecrets } from './security'
 import { writeJsonAtomic, writeTextAtomic } from './persistence'
 import { createWorktree, git, gitBranch, gitPreflight, removeWorktree, safePathSegment } from './git'
 import { pruneExpiredMemories, startScheduler } from './scheduler'
+import { startMailboxRouter } from './mailbox'
 
 type AgentStatus = 'idle' | 'working' | 'paused' | 'error' | 'offline'
 
@@ -97,7 +98,6 @@ const sessions = new Map<string, pty.IPty>()
 const taskOutputs = new Map<string, string>()
 const taskRuns = new Map<string, { id: string; startedAt: number }>()
 const taskTimeouts = new Map<string, NodeJS.Timeout>()
-const watchdogNotices = new Map<string, number>()
 const circuitStates = new Map<string, { steerCount: number; lastSteerAt: number; constrained: boolean }>()
 let db: Database.Database
 let mailboxRouter: NodeJS.Timeout | undefined
@@ -272,71 +272,13 @@ function ensureProjectWorkspace(project: Project) {
   return root
 }
 
-function routePendingMessages(project: Project) {
-  const root = ensureProjectWorkspace(project)
-  const outbox = join(root, 'outbox')
-  for (const filename of fs.readdirSync(outbox)) {
-    if (!filename.endsWith('.json')) continue
-    const sourcePath = join(outbox, filename)
-    let messageId: string | undefined
-    try {
-      const message = JSON.parse(fs.readFileSync(sourcePath, 'utf8')) as { id: string; toAgent: string }
-      messageId = message.id
-      if (!message.id || !message.toAgent) throw new Error('message requires id and toAgent')
-      if (!/^[A-Za-z0-9_-]+$/.test(message.toAgent) || !db.prepare('SELECT 1 FROM agents WHERE id=? AND project_id=?').get(message.toAgent, project.id)) throw new Error('message recipient is not a valid project agent')
-      const targetPath = join(root, 'inbox', `${message.toAgent}-${message.id}.json`)
-      if (!fs.existsSync(targetPath)) writeJsonAtomic(targetPath, message)
-      db.prepare("UPDATE messages SET status='delivered' WHERE message_id=? AND status!='dead-letter'").run(message.id)
-      fs.rmSync(sourcePath, { force: true })
-    } catch (error) {
-      const reason = error instanceof Error ? error.message : 'invalid message'
-      const attempts = messageId
-        ? Number((db.prepare('SELECT attempts FROM messages WHERE message_id=?').get(messageId) as { attempts?: number } | undefined)?.attempts ?? 0) + 1
-        : 3
-      if (messageId) db.prepare('UPDATE messages SET attempts=?, last_error=?, status=? WHERE message_id=?').run(attempts, reason, attempts >= 3 ? 'dead-letter' : 'pending', messageId)
-      if (attempts >= 3) {
-        const deadLetterPath = join(root, 'logs', 'dead-letter')
-        fs.mkdirSync(deadLetterPath, { recursive: true })
-        try { fs.renameSync(sourcePath, join(deadLetterPath, filename)) } catch { /* file may be in-flight */ }
-        recordEvent(project, null, 'message.dead-letter', { filename, reason, attempts })
-      } else {
-        recordEvent(project, null, 'message.retry', { filename, reason, attempts })
-      }
-    }
+function mailboxDependencies() {
+  return {
+    db,
+    getProjects: () => db.prepare('SELECT id, name, path, default_branch AS defaultBranch, use_worktrees AS useWorktrees FROM projects').all() as Project[],
+    ensureProjectWorkspace,
+    recordEvent,
   }
-}
-
-function runMailboxWatchdog(project: Project) {
-  const root = ensureProjectWorkspace(project)
-  const now = Date.now()
-  const staleAfterMs = 10 * 60_000
-  for (const folder of ['inbox', 'outbox']) {
-    for (const filename of fs.readdirSync(join(root, folder))) {
-      if (!filename.endsWith('.json')) continue
-      const path = join(root, folder, filename)
-      let stat: fs.Stats
-      try { stat = fs.statSync(path) } catch { continue }
-      if (now - stat.mtimeMs < staleAfterMs) continue
-      const key = `${project.id}/${folder}/${filename}`
-      if (watchdogNotices.get(key) === stat.mtimeMs) continue
-      watchdogNotices.set(key, stat.mtimeMs)
-      recordEvent(project, null, 'mailbox.stalled', { folder, filename, ageMs: Math.round(now - stat.mtimeMs) })
-    }
-  }
-}
-
-function startMailboxRouter() {
-  const route = () => {
-    const projects = db.prepare('SELECT id, name, path, default_branch AS defaultBranch, use_worktrees AS useWorktrees FROM projects').all() as Project[]
-    for (const project of projects) {
-      try {
-        routePendingMessages(project)
-        runMailboxWatchdog(project)
-      } catch { /* router akan mencoba lagi pada interval berikutnya */ }
-    }
-  }
-  route()
-  return setInterval(route, 2000)
 }
 
 function recordEvent(project: Project | undefined, agentId: string | null, type: string, payload: Record<string, unknown> = {}) {
@@ -1644,7 +1586,7 @@ function registerIpc() {
 app.whenReady().then(() => {
   initDb()
   registerIpc()
-  mailboxRouter = startMailboxRouter()
+  mailboxRouter = startMailboxRouter(mailboxDependencies())
   scheduler = startScheduler(schedulerDependencies())
   createWindow()
   app.on('activate', () => BrowserWindow.getAllWindows().length === 0 && createWindow())
