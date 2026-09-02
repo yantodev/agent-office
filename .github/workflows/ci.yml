@@ -77,10 +77,10 @@ jobs:
       - run: npm run smoke:unit
       - run: npm run smoke:web
       - run: npm run smoke:github
+      - run: npm run build
       - run: npm run smoke:native
       - run: npm run smoke:main
       - run: npm run smoke:migration
-      - run: npm run build
 
   package:
     name: Package / ${{ matrix.name }}
