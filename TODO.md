@@ -122,7 +122,7 @@ Roadmap ini disusun dari percakapan pada [ChatGPT share](https://chatgpt.com/sha
 - [x] Tambahkan target build macOS DMG.
 - [x] Uji native modules pada host Linux/Electron ABI.
 - [ ] Jalankan native smoke/build/packaging pada runner Windows dan macOS yang didukung.
-  CI matrix dan artifact upload sudah tersedia; checkbox ini menunggu eksekusi runner native Windows/macOS.
+  CI matrix, artifact upload, dan label `self-hosted` sudah tersedia; item ini menunggu host Windows/macOS terdaftar dan eksekusi workflow nyata.
 - [x] Sediakan native smoke test dan CI matrix Ubuntu/Windows/macOS untuk gate tersebut.
 - [x] Tambahkan release checklist, versioning, dan update notes.
 
@@ -151,7 +151,7 @@ Roadmap ini disusun dari percakapan pada [ChatGPT share](https://chatgpt.com/sha
 ### Prioritas P2 — Provider dan release readiness
 
 - [x] Implementasikan adapter provider-specific untuk Codex, OpenCode, Claude, Gemini, Qwen, dan Copilot agar identifikasi provider, context SOUL/task prompt, submit prompt, steer, interrupt, dan permission memiliki interface terpisah.
-- [ ] Lengkapi verifikasi native module dan packaging pada runner Windows/macOS, termasuk pause/resume yang saat ini POSIX-only dan smoke test GitHub CLI yang authenticated.
+- [ ] Lengkapi verifikasi native module dan packaging pada runner Windows/macOS, termasuk pause/resume yang saat ini POSIX-only dan smoke test GitHub CLI yang authenticated. Blocker eksternal: runner native dan kredensial GitHub CLI tidak tersedia di workspace ini.
 - [x] Tambahkan telemetry lokal yang aman untuk durasi task, ukuran output, dan alasan kegagalan tanpa menyimpan secret, serta dokumentasikan retention/backup database dan `.agent-office/`.
 
 ### Prioritas P3 — Web deployment

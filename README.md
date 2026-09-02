@@ -98,7 +98,9 @@ The development command starts the Vite renderer and launches the Electron appli
 | `npm run dev` | Start the Electron development environment |
 | `npm run typecheck` | Run the TypeScript compiler without emitting files |
 | `npm run smoke:unit` | Run isolated security, lifecycle, policy, and atomic persistence tests |
+| `npm run smoke:web` | Verify authenticated web API endpoints and storage transport |
 | `npm run build` | Build the main, preload, and renderer bundles |
+| `npm run web:server` | Start the standalone authenticated web API |
 | `npm run smoke:native` | Verify native dependencies and runtime behavior |
 | `npm run smoke:main` | Run main-process integration smoke tests |
 | `npm run smoke:migration` | Verify database migration behavior |
