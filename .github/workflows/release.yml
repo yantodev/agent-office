@@ -67,16 +67,18 @@ jobs:
             command: npm run dist:linux
             artifact: agent-office-linux
             path: dist/*.AppImage
-          - name: Windows NSIS
-            platform: windows
-            command: npm run dist:win
-            artifact: agent-office-windows
-            path: dist/*.exe
-          - name: macOS DMG
-            platform: macos
-            command: npm run dist:mac
-            artifact: agent-office-macos
-            path: dist/*.dmg
+          # Aktifkan kembali setelah runner Windows self-hosted tersedia.
+          # - name: Windows NSIS
+          #   platform: windows
+          #   command: npm run dist:win
+          #   artifact: agent-office-windows
+          #   path: dist/*.exe
+          # Aktifkan kembali setelah runner macOS self-hosted tersedia.
+          # - name: macOS DMG
+          #   platform: macos
+          #   command: npm run dist:mac
+          #   artifact: agent-office-macos
+          #   path: dist/*.dmg
     runs-on: [self-hosted, "${{ matrix.platform }}"]
     steps:
       - uses: actions/checkout@v7

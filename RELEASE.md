@@ -14,9 +14,9 @@
 
 ## Artifact
 
-- Linux: `npm run dist:linux` → AppImage.
-- Windows: `npm run dist:win` → NSIS.
-- macOS: `npm run dist:mac` → DMG.
+- Linux: `npm run dist:linux` → AppImage (aktif di workflow).
+- Windows: `npm run dist:win` → NSIS (sementara dinonaktifkan sampai runner Windows tersedia).
+- macOS: `npm run dist:mac` → DMG (sementara dinonaktifkan sampai runner macOS tersedia).
 
 ## GitHub Actions release
 
@@ -27,9 +27,9 @@ git tag v1.0.0
 git push origin v1.0.0
 ```
 
-The workflow runs the Linux validation gate, builds native installers on runners labeled `self-hosted` plus `linux`, `windows`, and `macos`, uploads the artifacts, and creates the GitHub Release with generated notes. A manual run is also available from **Actions → Agent Office Release** by providing an existing version tag.
+The workflow runs the Linux validation gate, builds the Linux AppImage on a runner labeled `self-hosted` plus `linux`, uploads the artifact, and creates the GitHub Release with generated notes. Packaging entries for Windows and macOS remain commented in the workflow until native runners are available. A manual run is also available from **Actions → Agent Office Release** by providing an existing version tag.
 
-CI menjalankan `smoke:native`, `smoke:main`, `smoke:migration`, dan target packaging native masing-masing pada Ubuntu (AppImage), Windows (NSIS), dan macOS (DMG). Workflow memiliki timeout, permission minimal, dan artifact wajib (`if-no-files-found: error`); workflow bisa dipicu melalui `workflow_dispatch` untuk review release.
+CI menjalankan `smoke:native`, `smoke:main`, dan `smoke:migration` pada Linux serta packaging AppImage. Workflow memiliki timeout, permission minimal, dan artifact wajib (`if-no-files-found: error`); workflow bisa dipicu melalui `workflow_dispatch` untuk review release.
 
 Verifikasi lokal terakhir: 2026-09-03, Linux x64. `npm run dist:linux` berhasil menghasilkan `dist/Agent Office-1.0.0.AppImage` setelah rebuild `better-sqlite3` dan `node-pty`. Production dan full dependency audit bersih (`npm audit` dan `npm audit --omit=dev`).
 
