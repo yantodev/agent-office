@@ -126,11 +126,17 @@ Roadmap ini disusun dari percakapan pada [ChatGPT share](https://chatgpt.com/sha
 - [x] Sediakan native smoke test dan CI matrix Ubuntu/Windows/macOS untuk gate tersebut.
 - [x] Tambahkan release checklist, versioning, dan update notes.
 
-## Urutan implementasi berikutnya
+## Status penutupan roadmap
 
-1. Provider-specific permission enforcement melalui sandbox/allowlist dan pengujian policy.
-2. Tambahkan unit/integration test terisolasi untuk redaction, lifecycle task, permission, path traversal/symlink, Git preflight, scheduler, dan race condition mailbox.
-3. Pecah `src/main/index.ts` menjadi modul per boundary agar perubahan lebih mudah diuji dan direview.
+Seluruh task yang dapat dikerjakan dan diverifikasi pada host Linux ini sudah selesai. Boundary schema/migration, domain service, IPC wiring, web gateway, worker runtime, smoke test, dan packaging baseline sudah dipisahkan serta tervalidasi.
+
+Satu release gate berikut masih membutuhkan infrastruktur eksternal:
+
+1. Jalankan workflow CI pada runner Windows dan macOS berlabel `self-hosted`, `windows`, dan `macos`.
+2. Pastikan native smoke test, build/packaging, pause/resume yang sesuai platform, dan authenticated GitHub CLI smoke test berhasil.
+3. Upload artifact hasil build dan catat hasilnya pada release checklist.
+
+Setelah gate tersebut berhasil, roadmap ini dapat ditutup sepenuhnya.
 
 ## Rekomendasi update aplikasi berikutnya
 
@@ -151,7 +157,7 @@ Roadmap ini disusun dari percakapan pada [ChatGPT share](https://chatgpt.com/sha
 ### Prioritas P2 — Provider dan release readiness
 
 - [x] Implementasikan adapter provider-specific untuk Codex, OpenCode, Claude, Gemini, Qwen, dan Copilot agar identifikasi provider, context SOUL/task prompt, submit prompt, steer, interrupt, dan permission memiliki interface terpisah.
-- [ ] Lengkapi verifikasi native module dan packaging pada runner Windows/macOS, termasuk pause/resume yang saat ini POSIX-only dan smoke test GitHub CLI yang authenticated. Blocker eksternal: runner native dan kredensial GitHub CLI tidak tersedia di workspace ini.
+- [ ] Lengkapi verifikasi native module dan packaging pada runner Windows/macOS, termasuk pause/resume yang saat ini POSIX-only dan smoke test GitHub CLI yang authenticated. Blocker eksternal: runner native dan kredensial GitHub CLI tidak tersedia di workspace ini. Acceptance: workflow CI sukses dan artifact Windows/macOS tersedia.
 - [x] Tambahkan telemetry lokal yang aman untuk durasi task, ukuran output, dan alasan kegagalan tanpa menyimpan secret, serta dokumentasikan retention/backup database dan `.agent-office/`.
 
 ### Prioritas P3 — Web deployment
