@@ -20,6 +20,7 @@ concurrency:
 
 env:
   NODE_VERSION: 22
+  GH_TOKEN: ${{ github.token }}
   ELECTRON_DISABLE_GPU: 1
 
 jobs:
