@@ -118,6 +118,12 @@ setTimeout(async () => {
   await call('tasks:update', { id: parent.id, status: 'review' })
   const preparedPr = await call('github:prepare-pr', { taskId: parent.id })
   if (!preparedPr.approvalId || !preparedPr.diffStat) throw new Error('GitHub PR preflight smoke failed')
+  fs.writeFileSync(path.join(repoPath, 'README.md'), '# smoke base conflict\n', 'utf8')
+  execFileSync('git', ['-C', repoPath, 'add', 'README.md'], { stdio: 'ignore' })
+  execFileSync('git', ['-C', repoPath, 'commit', '-m', 'conflicting base change'], { stdio: 'ignore' })
+  let conflictRejected = false
+  try { await call('github:prepare-pr', { taskId: parent.id }) } catch (error) { conflictRejected = String(error?.message ?? error).includes('conflict') }
+  if (!conflictRejected) throw new Error('GitHub PR conflict preflight smoke failed')
   const mission = await call('missions:create', { id: 'smoke-mission', projectId: project.id, request: '- Plan architecture\n- Review implementation' })
   if (mission.tasks.length !== 2) throw new Error('mission decomposition smoke failed')
 

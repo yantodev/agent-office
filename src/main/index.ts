@@ -104,8 +104,15 @@ function git(cwd: string, args: string[]) {
 }
 
 function gitPreflight(cwd: string, baseBranch: string, headBranch: string) {
+  // The three-tree form is supported by older Git releases, including Git 2.34.
+  // `merge-tree --write-tree` was introduced later and cannot be the only path
+  // here because PR preparation is also expected to work on older workstations.
   try {
-    execFileSync('git', ['-C', cwd, 'merge-tree', '--write-tree', baseBranch, headBranch], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
+    const mergeBase = git(cwd, ['merge-base', baseBranch, headBranch])
+    const mergeOutput = execFileSync('git', ['-C', cwd, 'merge-tree', mergeBase, baseBranch, headBranch], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
+    if (/(?:changed|added|deleted) in both|^CONFLICT\b|^both (?:modified|added|deleted)\b/im.test(mergeOutput)) {
+      return { ok: false, reason: 'conflict', detail: redactSecrets(mergeOutput).slice(0, 4_000) }
+    }
   } catch (error) {
     const output = error && typeof error === 'object' && 'stderr' in error ? String(error.stderr) : 'Unable to calculate merge tree'
     return { ok: false, reason: 'conflict', detail: redactSecrets(output).slice(0, 4_000) }
