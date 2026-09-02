@@ -24,7 +24,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: [linux, windows, macos]
+        platform:
+          - linux
+          # Aktifkan kembali setelah runner Windows self-hosted tersedia.
+          # - windows
+          # Aktifkan kembali setelah runner macOS self-hosted tersedia.
+          # - macos
     # Self-hosted runner wajib memiliki label "self-hosted" dan label OS yang sesuai.
     runs-on: [self-hosted, "${{ matrix.platform }}"]
     steps:
@@ -95,16 +100,18 @@ jobs:
             command: npm run dist:linux
             artifact: agent-office-linux
             path: dist/*.AppImage
-          - name: Windows NSIS
-            platform: windows
-            command: npm run dist:win
-            artifact: agent-office-windows
-            path: dist/*.exe
-          - name: macOS DMG
-            platform: macos
-            command: npm run dist:mac
-            artifact: agent-office-macos
-            path: dist/*.dmg
+          # Aktifkan kembali setelah runner Windows self-hosted tersedia.
+          # - name: Windows NSIS
+          #   platform: windows
+          #   command: npm run dist:win
+          #   artifact: agent-office-windows
+          #   path: dist/*.exe
+          # Aktifkan kembali setelah runner macOS self-hosted tersedia.
+          # - name: macOS DMG
+          #   platform: macos
+          #   command: npm run dist:mac
+          #   artifact: agent-office-macos
+          #   path: dist/*.dmg
     # Self-hosted runner wajib memiliki label "self-hosted" dan label OS yang sesuai.
     runs-on: [self-hosted, "${{ matrix.platform }}"]
     steps:
