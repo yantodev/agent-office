@@ -128,9 +128,9 @@ Roadmap ini disusun dari percakapan pada [ChatGPT share](https://chatgpt.com/sha
 
 ## Urutan implementasi berikutnya
 
-1. Provider-specific permission enforcement dan backup/diff konfigurasi CLI.
-2. Uji migrasi database serta native modules pada OS/arsitektur target.
-3. Hardening GitHub sync, PR result/test summary, dan recovery lintas crash scenario.
+1. Provider-specific permission enforcement melalui sandbox/allowlist dan pengujian policy.
+2. Tambahkan unit/integration test terisolasi untuk redaction, lifecycle task, permission, path traversal/symlink, Git preflight, scheduler, dan race condition mailbox.
+3. Pecah `src/main/index.ts` menjadi modul per boundary agar perubahan lebih mudah diuji dan direview.
 
 ## Rekomendasi update aplikasi berikutnya
 
@@ -138,15 +138,15 @@ Roadmap ini disusun dari percakapan pada [ChatGPT share](https://chatgpt.com/sha
 
 - [x] Buat Git compatibility gate dan fallback PR preflight. PR preflight kini memakai bentuk three-tree yang kompatibel dengan Git 2.34.1 dan smoke test mencakup branch bersih serta konflik.
 - [ ] Tegakkan permission profile secara nyata. Saat ini `filesystem`, `network`, dan `git` terutama dikirim sebagai environment flag; tambahkan enforcement melalui sandbox/allowlist dan uji bahwa agent tidak dapat melewati policy.
-- [ ] Hardening seluruh IPC dan konfigurasi: validasi sender, batasi path config/artifact ke workspace atau allowlist eksplisit, cek ulang symlink saat apply, dan jaga konsistensi transaksi antara file system dan SQLite.
-- [ ] Formalisasi task state machine dan dispatcher: validasi transisi status, otomatis membuka task setelah dependency selesai, cegah duplicate run, serta pulihkan retry/resume secara durable setelah crash.
+- [x] Hardening seluruh IPC dan konfigurasi: validasi sender, batasi path config/artifact ke workspace atau allowlist eksplisit, cek ulang symlink saat apply, dan jaga konsistensi transaksi antara file system dan SQLite.
+- [x] Formalisasi task state machine dan dispatcher: validasi transisi status, otomatis membuka task setelah dependency selesai, cegah duplicate run, serta pulihkan retry/resume secara durable setelah crash.
 
 ### Prioritas P1 — Maintainability dan observability
 
 - [ ] Pecah `src/main/index.ts` menjadi modul schema/migration, persistence, PTY, GitHub, mailbox, scheduler, memory, dan IPC agar perubahan dapat diuji serta direview per boundary.
-- [ ] Tambahkan event subscription atau polling terkontrol untuk task, mailbox, approval, memory, dan office floor; saat ini sebagian tampilan baru berubah setelah refresh manual atau lifecycle agent.
+- [x] Tambahkan event subscription atau polling terkontrol untuk task, mailbox, approval, memory, dan office floor; polling berhenti saat window tersembunyi, mencegah request overlap, dan refresh saat window kembali aktif.
 - [ ] Tambahkan unit/integration test terisolasi untuk redaction, lifecycle task, permission, path traversal/symlink, Git preflight, scheduler, dan race condition mailbox; pertahankan smoke test sebagai test end-to-end.
-- [ ] Tambahkan validasi input dan error UX di renderer. Banyak handler async dipanggil tanpa `try/catch`, sehingga error IPC dapat menjadi unhandled rejection dan tidak memberi feedback ke pengguna.
+- [x] Tambahkan validasi input dan error UX di renderer. Form utama memakai validasi native dan banner global menangkap kegagalan IPC/runtime dengan opsi dismiss.
 
 ### Prioritas P2 — Provider dan release readiness
 

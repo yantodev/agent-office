@@ -17,6 +17,12 @@ const taskColumns: Array<{ status: TaskStatus; label: string }> = [
   { status: 'failed', label: 'Failed' },
 ]
 
+function errorMessage(error: unknown) {
+  if (error instanceof Error && error.message) return error.message
+  if (typeof error === 'string' && error.trim()) return error
+  return 'Operasi gagal. Periksa input lalu coba lagi.'
+}
+
 /** Menjalankan refresh berkala hanya saat window terlihat dan tanpa request overlap. */
 function useVisiblePolling(callback: () => Promise<void>, intervalMs: number, dependencies: React.DependencyList) {
   useEffect(() => {
@@ -177,23 +183,23 @@ function CommandCenter({ project, agents }: { project: Project | null; agents: A
       <form className="mission-form panel-card" onSubmit={createMission}>
         <div className="panel-title"><h3>New mission</h3><span>{missions.length} missions</span></div>
         <input aria-label="Mission title" placeholder="Mission title (optional)" value={missionTitle} onChange={event => setMissionTitle(event.target.value)} />
-        <textarea aria-label="Mission request" placeholder="Describe the goal. Use bullet points for deterministic task decomposition." rows={4} value={missionRequest} onChange={event => setMissionRequest(event.target.value)} />
+        <textarea aria-label="Mission request" placeholder="Describe the goal. Use bullet points for deterministic task decomposition." rows={4} required value={missionRequest} onChange={event => setMissionRequest(event.target.value)} />
         <button className="save-profile" type="submit" disabled={!project}>Decompose mission</button>
       </form>
       <form className="schedule-form panel-card" onSubmit={createSchedule}>
         <div className="panel-title"><h3>Scheduled mission</h3><span>UTC-safe next run</span></div>
-        <input aria-label="Schedule name" placeholder="Schedule name" value={scheduleName} onChange={event => setScheduleName(event.target.value)} />
-        <textarea aria-label="Schedule prompt" placeholder="Heartbeat or recurring task prompt" rows={2} value={schedulePrompt} onChange={event => setSchedulePrompt(event.target.value)} />
+        <input aria-label="Schedule name" placeholder="Schedule name" required value={scheduleName} onChange={event => setScheduleName(event.target.value)} />
+        <textarea aria-label="Schedule prompt" placeholder="Heartbeat or recurring task prompt" rows={2} required value={schedulePrompt} onChange={event => setSchedulePrompt(event.target.value)} />
         <div className="schedule-fields"><input aria-label="Interval minutes" type="number" min="1" value={scheduleInterval} onChange={event => setScheduleInterval(event.target.value)} /><select aria-label="Schedule agent" value={scheduleAgentId} onChange={event => setScheduleAgentId(event.target.value)}><option value="">Unassigned</option>{agents.map(agent => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select></div>
         <button className="save-profile" type="submit" disabled={!project}>Create schedule</button>
       </form>
       <div className="github-form panel-card"><div className="panel-title"><h3>GitHub bridge</h3><span>{github.authenticated ? 'authenticated' : github.installed ? 'login required' : 'gh missing'}</span></div><p className="muted">Sync issues as durable tasks. PR creation always waits for approval.</p><button className="save-profile" type="button" onClick={importGithubIssues} disabled={!project || !github.authenticated}>Sync issues</button>{githubMessage && <small className="muted">{githubMessage}</small>}</div>
     </div>
     <form className="task-form" onSubmit={createTask}>
-      <input aria-label="Task title" placeholder="Task title" value={title} onChange={event => setTitle(event.target.value)} />
+      <input aria-label="Task title" placeholder="Task title" required value={title} onChange={event => setTitle(event.target.value)} />
       <select aria-label="Assign agent" value={agentId} onChange={event => setAgentId(event.target.value)}><option value="">Unassigned</option>{agents.map(agent => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select>
       <select aria-label="Task dependencies" multiple value={dependencyIds} onChange={event => setDependencyIds(Array.from(event.target.selectedOptions, option => option.value))}>{tasks.filter(task => task.status !== 'done').map(task => <option key={task.id} value={task.id}>{task.title}</option>)}</select>
-      <textarea aria-label="Task prompt" placeholder="Describe the work the agent should perform" rows={3} value={prompt} onChange={event => setPrompt(event.target.value)} />
+      <textarea aria-label="Task prompt" placeholder="Describe the work the agent should perform" rows={3} required value={prompt} onChange={event => setPrompt(event.target.value)} />
       <button className="save-profile" type="submit" disabled={!project}>Create task</button>
     </form>
     <div className="kanban-board">
@@ -269,10 +275,10 @@ function MemoryCenter({ project, agents }: { project: Project | null; agents: Ag
       <div className="panel-card">
         <div className="panel-title"><h3>{editingId ? 'Edit memory' : 'New memory'}</h3>{editingId && <button className="link-button" onClick={() => { setEditingId(undefined); setDraft(emptyMemory) }}>Cancel</button>}</div>
         <form className="profile-form" onSubmit={saveMemory}>
-          <input aria-label="Memory title" placeholder="Title" value={draft.title} onChange={event => setDraft({ ...draft, title: event.target.value })} />
+          <input aria-label="Memory title" placeholder="Title" required value={draft.title} onChange={event => setDraft({ ...draft, title: event.target.value })} />
           <input aria-label="Memory category" placeholder="Category" value={draft.category} onChange={event => setDraft({ ...draft, category: event.target.value })} />
           <select aria-label="Memory agent" value={draft.agentId} onChange={event => setDraft({ ...draft, agentId: event.target.value })}><option value="">Shared memory</option>{agents.map(agent => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select>
-          <textarea aria-label="Memory body" placeholder="Write a decision, fact, error, or useful context" rows={12} value={draft.body} onChange={event => setDraft({ ...draft, body: event.target.value })} />
+          <textarea aria-label="Memory body" placeholder="Write a decision, fact, error, or useful context" rows={12} required value={draft.body} onChange={event => setDraft({ ...draft, body: event.target.value })} />
           <button className="save-profile" type="submit" disabled={!project}>Save memory</button>
         </form>
       </div>
@@ -317,7 +323,7 @@ function SettingsCenter({ project }: { project: Project | null }) {
   return <section className="settings-center">
     <div className="command-header"><div><h2>Settings & safety</h2><p>{project ? 'Preview and approve CLI configuration changes.' : 'Select a workspace first.'}</p></div></div>
     <div className="settings-layout">
-      <form className="panel-card profile-form" onSubmit={prepare}><h3>CLI config change</h3><input aria-label="CLI config path" placeholder="Absolute CLI config path" value={configPath} onChange={event => setConfigPath(event.target.value)} /><textarea aria-label="CLI config content" placeholder="Proposed complete file content" rows={14} value={configContent} onChange={event => setConfigContent(event.target.value)} /><small className="muted">The current file is backed up before replacement. Secret values are redacted in the diff and event log.</small><button className="save-profile" type="submit" disabled={!project}>Preview & request approval</button>{diff && <pre className="config-diff">{diff}</pre>}{notice && <small className="muted">{notice}</small>}</form>
+    <form className="panel-card profile-form" onSubmit={prepare}><h3>CLI config change</h3><input aria-label="CLI config path" placeholder="Absolute CLI config path" required value={configPath} onChange={event => setConfigPath(event.target.value)} /><textarea aria-label="CLI config content" placeholder="Proposed complete file content" rows={14} required value={configContent} onChange={event => setConfigContent(event.target.value)} /><small className="muted">The current file is backed up before replacement. Secret values are redacted in the diff and event log.</small><button className="save-profile" type="submit" disabled={!project}>Preview & request approval</button>{diff && <pre className="config-diff">{diff}</pre>}{notice && <small className="muted">{notice}</small>}</form>
       <div className="panel-card"><div className="panel-title"><h3>Config approvals</h3><span>{approvals.filter(approval => approval.type === 'config-change' && approval.status === 'pending').length} pending</span></div><div className="approval-list">{approvals.filter(approval => approval.type === 'config-change').map(approval => <div className="approval-row" key={approval.id}><strong>{approval.title}</strong><p>{approval.reason}</p>{approval.status === 'pending' && <div className="profile-actions"><button onClick={() => resolve(approval, 'approved')}>Approve</button><button onClick={() => resolve(approval, 'rejected')}>Reject</button></div>}{approval.status === 'approved' && <button onClick={() => apply(approval)}>Apply backed-up change</button>}</div>)}</div></div>
     </div>
   </section>
@@ -392,6 +398,23 @@ function App() {
   const [commitMessage, setCommitMessage] = useState('')
   const [commitLocked, setCommitLocked] = useState(false)
   const [view, setView] = useState<AppView>('dashboard')
+  const [rendererError, setRendererError] = useState('')
+
+  useEffect(() => {
+    const onUnhandledRejection = (event: PromiseRejectionEvent) => {
+      event.preventDefault()
+      setRendererError(errorMessage(event.reason))
+    }
+    const onWindowError = (event: ErrorEvent) => {
+      setRendererError(errorMessage(event.error ?? event.message))
+    }
+    window.addEventListener('unhandledrejection', onUnhandledRejection)
+    window.addEventListener('error', onWindowError)
+    return () => {
+      window.removeEventListener('unhandledrejection', onUnhandledRejection)
+      window.removeEventListener('error', onWindowError)
+    }
+  }, [])
 
   const refresh = async () => {
     const [nextAgents, nextProfiles, nextProjects, nextActiveProject] = await Promise.all([
@@ -537,6 +560,8 @@ function App() {
         <div className="workspace-switcher"><label htmlFor="project-select">Workspace</label><select id="project-select" value={activeProject?.id ?? ''} onChange={event => selectProject(event.target.value)}>{projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}</select><code title={activeProject?.path}>{activeProject?.path ?? 'No workspace selected'}</code></div>
         <div className="stats"><span><b>{fleet?.agents.total ?? agents.length}</b> agents</span><span><b>{fleet?.agents.working ?? agents.filter(agent => agent.status === 'working').length}</b> working</span><span><b>{fleet?.tasks.queued ?? 0}</b> queued</span><span><b>{fleet?.approvals.pending ?? 0}</b> approvals</span></div>
       </header>
+
+      {rendererError && <div className="renderer-feedback" role="alert"><span>{rendererError}</span><button type="button" onClick={() => setRendererError('')}>Dismiss</button></div>}
 
       {view === 'dashboard' ? <DashboardCenter project={activeProject} agents={agents} fleet={fleet} onSelect={id => { setActiveId(id); setCommitLocked(false) }} /> : view === 'agents' ? <AgentsCenter agents={agents} profiles={profiles} active={active} profileDraft={profileDraft} editingProfileId={editingProfileId} onSelect={id => { setActiveId(id); setCommitLocked(false) }} onStart={start} onStop={stop} onHire={addAgent} onProfileDraftChange={setProfileDraft} onSaveProfile={saveProfile} onEditProfile={editProfile} onRemoveProfile={removeProfile} onCancelProfile={() => { setEditingProfileId(null); setProfileDraft(emptyProfile) }} /> : view === 'workspaces' ? <WorkspacesCenter projects={projects} activeProject={activeProject} projectDraft={projectDraft} onDraftChange={setProjectDraft} onCreate={createProject} onSelect={selectProject} /> : view === 'inbox' ? <InboxCenter project={activeProject} agents={agents} /> : view === 'github' ? <GithubCenter project={activeProject} /> : view === 'command' ? <CommandCenter project={activeProject} agents={agents} /> : view === 'memory' ? <MemoryCenter project={activeProject} agents={agents} /> : view === 'settings' ? <SettingsCenter project={activeProject} /> : <><section className="workspace">
         <div className="floor-card">
