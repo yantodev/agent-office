@@ -1,0 +1,150 @@
+name: Agent Office Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag semver yang sudah ada, contoh v1.0.0'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: 22
+  ELECTRON_DISABLE_GPU: 1
+
+jobs:
+  validate:
+    name: Release validation / Linux
+    runs-on: [self-hosted, linux]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.x'
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install Linux release dependencies
+        run: sudo apt-get update && sudo apt-get install --yes build-essential python3 gh libgtk-3-0t64 libnss3 libasound2t64 libgbm1 libxss1 xvfb
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run smoke:unit
+      - run: npm run smoke:web
+      - run: npm run smoke:github
+      - run: npm run build
+      - run: npm run smoke:native
+      - run: npm run smoke:main
+      - run: npm run smoke:migration
+
+  package:
+    name: Release package / ${{ matrix.name }}
+    needs: validate
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux AppImage
+            platform: linux
+            command: npm run dist:linux
+            artifact: agent-office-linux
+            path: dist/*.AppImage
+          - name: Windows NSIS
+            platform: windows
+            command: npm run dist:win
+            artifact: agent-office-windows
+            path: dist/*.exe
+          - name: macOS DMG
+            platform: macos
+            command: npm run dist:mac
+            artifact: agent-office-macos
+            path: dist/*.dmg
+    runs-on: [self-hosted, "${{ matrix.platform }}"]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.x'
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install Linux release dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install --yes build-essential python3 gh libgtk-3-0t64 libnss3 libasound2t64 libgbm1 libxss1 xvfb
+
+      - name: Verify release tag
+        env:
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+        run: node scripts/release-tag-check.cjs
+
+      - run: npm ci
+      - name: Build installer
+        run: ${{ matrix.command }}
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.path }}
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    name: Create GitHub Release
+    needs: package
+    runs-on: [self-hosted, linux]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+
+      - name: Install GitHub CLI
+        run: sudo apt-get update && sudo apt-get install --yes gh
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: agent-office-*
+          path: dist
+          merge-multiple: true
+
+      - name: Create GitHub Release with installers
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+        shell: bash
+        run: |
+          shopt -s nullglob
+          assets=(dist/*.AppImage dist/*.exe dist/*.dmg)
+          if (( ${#assets[@]} == 0 )); then
+            echo 'Tidak ada installer yang berhasil diunduh'
+            exit 1
+          fi
+          gh release create "$RELEASE_TAG" "${assets[@]}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Agent Office $RELEASE_TAG" \
+            --generate-notes \
+            --verify-tag
