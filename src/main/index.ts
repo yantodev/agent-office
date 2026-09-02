@@ -11,6 +11,7 @@ import type { BlockedReason, TaskStatus } from './task-lifecycle'
 import { executionPlan } from './permission-policy'
 import { canonicalPath, isCanonicalPathInside, redactSecrets } from './security'
 import { writeJsonAtomic, writeTextAtomic } from './persistence'
+import { createWorktree, git, gitBranch, gitPreflight, removeWorktree, safePathSegment } from './git'
 
 type AgentStatus = 'idle' | 'working' | 'paused' | 'error' | 'offline'
 
@@ -105,33 +106,6 @@ let quitting = false
 if (process.env.ELECTRON_DISABLE_GPU === '1') {
   app.disableHardwareAcceleration()
   app.commandLine.appendSwitch('disable-gpu')
-}
-
-function git(cwd: string, args: string[]) {
-  return execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()
-}
-
-function gitPreflight(cwd: string, baseBranch: string, headBranch: string) {
-  // The three-tree form is supported by older Git releases, including Git 2.34.
-  // `merge-tree --write-tree` was introduced later and cannot be the only path
-  // here because PR preparation is also expected to work on older workstations.
-  try {
-    const mergeBase = git(cwd, ['merge-base', baseBranch, headBranch])
-    const mergeOutput = execFileSync('git', ['-C', cwd, 'merge-tree', mergeBase, baseBranch, headBranch], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
-    if (/(?:changed|added|deleted) in both|^CONFLICT\b|^both (?:modified|added|deleted)\b/im.test(mergeOutput)) {
-      return { ok: false, reason: 'conflict', detail: redactSecrets(mergeOutput).slice(0, 4_000) }
-    }
-  } catch (error) {
-    const output = error && typeof error === 'object' && 'stderr' in error ? String(error.stderr) : 'Unable to calculate merge tree'
-    return { ok: false, reason: 'conflict', detail: redactSecrets(output).slice(0, 4_000) }
-  }
-  try {
-    execFileSync('git', ['-C', cwd, 'diff', '--check', `${baseBranch}...${headBranch}`], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
-  } catch (error) {
-    const output = error && typeof error === 'object' && 'stdout' in error ? String(error.stdout) : 'Whitespace errors detected'
-    return { ok: false, reason: 'diff-check', detail: redactSecrets(output).slice(0, 4_000) }
-  }
-  return { ok: true as const }
 }
 
 function gh(cwd: string, args: string[]) {
@@ -251,10 +225,6 @@ function validateIdentifier(value: string, label: string) {
   return value
 }
 
-function safePathSegment(value: string) {
-  return value.replace(/[^A-Za-z0-9._-]/g, '-').replace(/^[.-]+|[.-]+$/g, '').slice(0, 64) || 'workspace'
-}
-
 function redactPayload(value: unknown): unknown {
   if (typeof value === 'string') return redactSecrets(value)
   if (Array.isArray(value)) return value.map(redactPayload)
@@ -293,29 +263,6 @@ function unifiedDiff(before: string, after: string) {
     if (lines.length >= 2002) { lines.push(' ... diff truncated ...'); break }
   }
   return lines.join('\n')
-}
-
-function gitBranch(path: string) {
-  try {
-    return git(path, ['branch', '--show-current']) || 'HEAD'
-  } catch {
-    return null
-  }
-}
-
-function createWorktree(project: Project, agentId: string) {
-  if (!project.useWorktrees || !gitBranch(project.path)) return { cwd: project.path, worktreePath: null, branch: null }
-  const worktreePath = join(app.getPath('userData'), 'worktrees', safePathSegment(project.id), safePathSegment(agentId))
-  const branchBase = agentId.replace(/[^A-Za-z0-9._-]/g, '-').replace(/^[.-]+|[.-]+$/g, '').slice(0, 32) || 'worker'
-  const branch = `agent/${branchBase}-${randomUUID().slice(0, 8)}`
-  fs.mkdirSync(join(app.getPath('userData'), 'worktrees', project.id), { recursive: true })
-  git(project.path, ['worktree', 'add', '-b', branch, worktreePath, project.defaultBranch])
-  return { cwd: worktreePath, worktreePath, branch }
-}
-
-function removeWorktree(project: Project | undefined, worktreePath: string | null | undefined) {
-  if (!project || !worktreePath) return
-  try { git(project.path, ['worktree', 'remove', worktreePath]) } catch { /* perubahan lokal tidak dihapus otomatis */ }
 }
 
 function ensureProjectWorkspace(project: Project) {
@@ -1472,7 +1419,7 @@ function registerIpc() {
     if (input.profileId && !profile) throw new Error('Profile not found')
     const role = profile?.role ?? input.role
     const command = profile?.command ?? requestedCommand
-    const workspace = project ? createWorktree(project, input.id) : { cwd: input.cwd || os.homedir(), worktreePath: null, branch: null }
+    const workspace = project ? createWorktree(project, input.id, app.getPath('userData')) : { cwd: input.cwd || os.homedir(), worktreePath: null, branch: null }
     try {
       db.prepare(`INSERT INTO agents (id,name,command,cwd,role,project_id,worktree_path,branch,profile_id,status) VALUES (@id,@name,@command,@cwd,@role,@projectId,@worktreePath,@branch,@profileId,'idle')`)
         .run({ ...input, role, command, cwd: workspace.cwd, projectId: project?.id ?? null, worktreePath: workspace.worktreePath, branch: workspace.branch, profileId: input.profileId ?? null })
