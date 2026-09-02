@@ -28,6 +28,7 @@ const fakeApp = {
   quit: () => {}
 }
 class FakeWindow {
+  constructor() { this.webContents = { on: () => {}, setWindowOpenHandler: () => {} } }
   loadURL() {}
   loadFile() {}
   static getAllWindows() { return [] }
@@ -57,14 +58,19 @@ setTimeout(async () => {
     process.exit(2)
   }
 
-  const call = async (name, input, event = {}) => {
+  const trustedEvent = { senderFrame: { url: 'file:///agent-office/index.html' }, sender: { send: () => {} } }
+  const call = async (name, input, event = trustedEvent) => {
     const handler = handlers.get(name)
     if (!handler) throw new Error(`missing IPC handler: ${name}`)
     return await handler(event, input)
   }
+  let senderRejected = false
+  try { await call('projects:list', undefined, { senderFrame: { url: 'https://untrusted.example' } }) } catch { senderRejected = true }
+  if (!senderRejected) throw new Error('renderer sender validation smoke failed')
   const project = await call('projects:create', { id: 'smoke-project', name: 'Smoke Project', path: repoPath, useWorktrees: true })
   await call('projects:set-active', project.id)
-  const firstAgent = await call('agents:create', { id: 'smoke-agent-1', name: 'Smoke One', role: 'Implementation', command: 'printf smoke', cwd: '.', projectId: project.id, profileId: 'developer' })
+  await call('profiles:create', { id: 'smoke-hold-profile', name: 'Smoke Hold', role: 'Implementation', command: holdCommand, soul: '', permissions: { filesystem: true, network: true, shell: true, git: true, secrets: false } })
+  const firstAgent = await call('agents:create', { id: 'smoke-agent-1', name: 'Smoke One', role: 'Implementation', command: 'printf smoke', cwd: '.', projectId: project.id, profileId: 'smoke-hold-profile' })
   const secondAgent = await call('agents:create', { id: 'smoke-agent-2', name: 'Smoke Two', role: 'Review', command: 'printf smoke', cwd: '.', projectId: project.id, profileId: 'reviewer' })
   await call('git:acquire-commit-lock', { projectId: project.id, agentId: firstAgent.id })
   let lockRejected = false
@@ -77,16 +83,31 @@ setTimeout(async () => {
   if (latestCommit !== 'smoke worker commit') throw new Error('git commit smoke failed')
   await call('git:acquire-commit-lock', { projectId: project.id, agentId: secondAgent.id })
   await call('git:release-commit-lock', { projectId: project.id, agentId: secondAgent.id })
-  await handlers.get('agent:start')({ sender: { send: () => {} } }, { ...firstAgent, command: holdCommand })
-  const controlEvent = { sender: { send: () => {} } }
-  await call('agent:control', { id: firstAgent.id, action: 'pause' }, controlEvent)
-  if ((await call('agents:list')).find(value => value.id === firstAgent.id).status !== 'paused') throw new Error('agent pause smoke failed')
-  await call('agent:control', { id: firstAgent.id, action: 'resume' }, controlEvent)
+  await handlers.get('agent:start')(trustedEvent, { ...firstAgent, command: 'printf forged-command', cwd: '/tmp', profileId: 'developer' })
+  const controlEvent = trustedEvent
+  if (process.platform === 'win32') {
+    let pauseRejected = false
+    try { await call('agent:control', { id: firstAgent.id, action: 'pause' }, controlEvent) } catch { pauseRejected = true }
+    if (!pauseRejected) throw new Error('Windows pause capability smoke failed')
+  } else {
+    await call('agent:control', { id: firstAgent.id, action: 'pause' }, controlEvent)
+    if ((await call('agents:list')).find(value => value.id === firstAgent.id).status !== 'paused') throw new Error('agent pause smoke failed')
+    await call('agent:control', { id: firstAgent.id, action: 'resume' }, controlEvent)
+  }
   await call('agent:control', { id: firstAgent.id, action: 'constrain' }, controlEvent)
   let steerRejected = false
   try { await call('agent:control', { id: firstAgent.id, action: 'steer', text: 'expand scope' }, controlEvent) } catch { steerRejected = true }
   if (!steerRejected) throw new Error('circuit breaker smoke failed')
+  const duplicateTask = await call('tasks:create', { id: 'smoke-duplicate-task', projectId: project.id, title: 'Duplicate run', prompt: 'Do not start while another session is active', agentId: firstAgent.id })
+  let duplicateRejected = false
+  try { await handlers.get('agent:start')(trustedEvent, { ...firstAgent, taskId: duplicateTask.id }) } catch { duplicateRejected = true }
+  if (!duplicateRejected) throw new Error('duplicate task run smoke failed')
   await call('agent:stop', firstAgent.id)
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const currentAgent = (await call('agents:list')).find(value => value.id === firstAgent.id)
+    if (currentAgent && currentAgent.status !== 'working' && currentAgent.status !== 'paused') break
+    await new Promise(resolve => setTimeout(resolve, 25))
+  }
   const message = await call('messages:send', { projectId: project.id, fromAgent: firstAgent.id, toAgent: secondAgent.id, body: 'hello smoke' })
   intervals[0]()
   const routedMessage = (await call('messages:list', project.id)).find(value => value.id === message.id)
@@ -114,10 +135,12 @@ setTimeout(async () => {
 
   const parent = await call('tasks:create', { id: 'smoke-task-parent', projectId: project.id, title: 'Parent', prompt: 'Implement parent', agentId: firstAgent.id })
   const child = await call('tasks:create', { id: 'smoke-task-child', projectId: project.id, title: 'Child', prompt: 'Review parent', agentId: secondAgent.id, dependsOnTaskIds: [parent.id] })
-  if (child.dependencies.length !== 1) throw new Error('task dependency smoke failed')
+  if (child.dependencies.length !== 1 || child.status !== 'blocked' || child.blockedReason !== 'dependencies') throw new Error('task dependency blocking smoke failed')
   await call('tasks:update', { id: parent.id, status: 'review' })
   const preparedPr = await call('github:prepare-pr', { taskId: parent.id })
   if (!preparedPr.approvalId || !preparedPr.diffStat) throw new Error('GitHub PR preflight smoke failed')
+  await call('tasks:set-review', { taskId: parent.id, status: 'approved', notes: 'Dependency dispatcher smoke' })
+  if ((await call('tasks:list', project.id)).find(value => value.id === child.id).status !== 'assigned') throw new Error('dependent task promotion smoke failed')
   fs.writeFileSync(path.join(repoPath, 'README.md'), '# smoke base conflict\n', 'utf8')
   execFileSync('git', ['-C', repoPath, 'add', 'README.md'], { stdio: 'ignore' })
   execFileSync('git', ['-C', repoPath, 'commit', '-m', 'conflicting base change'], { stdio: 'ignore' })
@@ -148,7 +171,8 @@ setTimeout(async () => {
   if (eventLog.includes('supersecret')) throw new Error('event log secret redaction smoke failed')
 
   const secretTask = await call('tasks:create', { id: 'smoke-secret-task', projectId: project.id, title: 'Secret output', prompt: 'Print a diagnostic result', agentId: firstAgent.id })
-  await handlers.get('agent:start')({ sender: { send: () => {} } }, { ...firstAgent, command: secretCommand, taskId: secretTask.id, taskPrompt: '' })
+  await call('profiles:update', { id: 'smoke-hold-profile', name: 'Smoke Secret', role: 'Implementation', command: secretCommand, soul: '', permissions: { filesystem: true, network: true, shell: true, git: true, secrets: false } })
+  await handlers.get('agent:start')(trustedEvent, { ...firstAgent, command: 'printf forged-secret-command', taskId: secretTask.id, taskPrompt: 'forged prompt' })
   await new Promise(resolve => setTimeout(resolve, 250))
   const persistedSecretTask = (await call('tasks:list', project.id)).find(value => value.id === secretTask.id)
   if (!persistedSecretTask || String(persistedSecretTask.result).includes('supersecret')) throw new Error('task output secret redaction smoke failed')

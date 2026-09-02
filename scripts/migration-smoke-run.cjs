@@ -45,6 +45,7 @@ const fakeApp = {
   quit: () => {}
 }
 class FakeWindow {
+  constructor() { this.webContents = { on: () => {}, setWindowOpenHandler: () => {} } }
   loadURL() {}
   loadFile() {}
   static getAllWindows() { return [] }

@@ -48,6 +48,18 @@ type Task = {
   reviewNotes?: string | null
   branch?: string | null
   budgetMinutes?: number | null
+  blockedReason?: string | null
+}
+
+const taskStatuses = ['backlog', 'assigned', 'running', 'blocked', 'review', 'done', 'failed'] as const
+const taskTransitions: Record<TaskStatus, readonly TaskStatus[]> = {
+  backlog: ['assigned', 'blocked', 'review'],
+  assigned: ['backlog', 'blocked', 'running', 'review'],
+  running: ['blocked', 'review', 'failed'],
+  blocked: ['backlog', 'assigned', 'running'],
+  review: ['blocked', 'done', 'running'],
+  done: [],
+  failed: ['backlog', 'assigned', 'running']
 }
 
 type Schedule = {
@@ -72,6 +84,10 @@ type Mission = {
 }
 
 const projectFolders = ['inbox', 'outbox', 'tasks', 'memory', 'logs', 'pending-config']
+const profilePermissionKeys = ['filesystem', 'network', 'shell', 'git', 'secrets'] as const
+type ProfilePermission = typeof profilePermissionKeys[number]
+type ProfilePermissions = Record<ProfilePermission, boolean>
+const defaultProfilePermissions: ProfilePermissions = { filesystem: true, network: true, shell: true, git: true, secrets: false }
 
 type AgentProfile = {
   id: string
@@ -136,6 +152,110 @@ function isDirectory(path: string) {
   } catch {
     return false
   }
+}
+
+function normalizePermissions(value: unknown): ProfilePermissions {
+  const source = value && typeof value === 'object' ? value as Record<string, unknown> : {}
+  return profilePermissionKeys.reduce((permissions, key) => {
+    if (typeof source[key] === 'boolean') permissions[key] = source[key] as boolean
+    return permissions
+  }, { ...defaultProfilePermissions })
+}
+
+function parsePermissions(value?: string): ProfilePermissions {
+  try { return normalizePermissions(value ? JSON.parse(value) : {}) } catch { return { ...defaultProfilePermissions } }
+}
+
+function canonicalPath(path: string) {
+  let current = resolve(path)
+  const tail: string[] = []
+  while (!fs.existsSync(current)) {
+    const parent = dirname(current)
+    if (parent === current) return resolve(path)
+    tail.unshift(basename(current))
+    current = parent
+  }
+  try { return join(fs.realpathSync.native(current), ...tail) } catch { return resolve(path) }
+}
+
+function isCanonicalPathInside(parent: string, candidate: string) {
+  const root = canonicalPath(parent).replace(/[\\/]$/, '')
+  const target = canonicalPath(candidate)
+  return target === root || target.startsWith(`${root}${target.includes('\\') ? '\\' : '/'}`)
+}
+
+function projectConfigRoots(project: Project) {
+  const home = os.homedir()
+  return [
+    project.path,
+    join(home, '.codex'),
+    join(home, '.claude'),
+    join(home, '.config', 'opencode'),
+    join(home, '.config', 'gemini'),
+    join(home, '.config', 'qwen'),
+    join(home, '.config', 'github-copilot')
+  ]
+}
+
+function validateConfigPath(project: Project, value: string) {
+  if (typeof value !== 'string' || !value.trim()) throw new Error('Config path is required')
+  const configPath = resolve(value)
+  const parentPath = dirname(configPath)
+  if (!isDirectory(parentPath)) throw new Error('Config path parent does not exist')
+  if (!projectConfigRoots(project).some(root => isCanonicalPathInside(root, parentPath))) {
+    throw new Error('Config path must be inside the project or an approved CLI config directory')
+  }
+  if (fs.existsSync(configPath)) {
+    const fileStat = fs.lstatSync(configPath)
+    if (fileStat.isSymbolicLink() || fileStat.isDirectory() || !fileStat.isFile()) {
+      throw new Error('Config path must be a regular file, not a symlink or directory')
+    }
+    if (!projectConfigRoots(project).some(root => isCanonicalPathInside(root, configPath))) {
+      throw new Error('Config path resolves outside the approved directory')
+    }
+  }
+  return configPath
+}
+
+function validateArtifactLocation(project: Project, value: string) {
+  if (typeof value !== 'string' || !value.trim()) throw new Error('Artifact location is required')
+  const location = value.trim()
+  if (/^https:\/\//i.test(location)) return location
+  if (/^[a-z][a-z0-9+.-]*:/i.test(location)) throw new Error('Artifact location only supports local paths or HTTPS URLs')
+  const artifactPath = resolve(project.path, location)
+  const worktreeRoot = join(app.getPath('userData'), 'worktrees', safePathSegment(project.id))
+  if (!isCanonicalPathInside(project.path, artifactPath) && !isCanonicalPathInside(worktreeRoot, artifactPath)) {
+    throw new Error('Artifact path must be inside the project or its agent worktrees')
+  }
+  if (fs.existsSync(artifactPath) && fs.lstatSync(artifactPath).isSymbolicLink()) {
+    throw new Error('Artifact path cannot be a symbolic link')
+  }
+  return artifactPath
+}
+
+function validateMemoryPath(project: Project, value: string) {
+  if (typeof value !== 'string' || !isCanonicalPathInside(join(ensureProjectWorkspace(project), 'memory'), value)) {
+    throw new Error('Memory file must remain inside the project memory directory')
+  }
+  if (fs.existsSync(value) && fs.lstatSync(value).isSymbolicLink()) throw new Error('Memory file cannot be a symbolic link')
+  return value
+}
+
+function assertTrustedRenderer(event: { senderFrame?: { url: string } | null }) {
+  // Test harnesses do not have a WebContents frame; real Electron IPC events always do.
+  if (!event.senderFrame) return
+  const senderUrl = event.senderFrame.url
+  if (app.isPackaged) {
+    if (senderUrl.startsWith('file://')) return
+  } else {
+    const rendererUrl = process.env.ELECTRON_RENDERER_URL
+    if (rendererUrl) {
+      try {
+        if (new URL(senderUrl).origin === new URL(rendererUrl).origin) return
+      } catch { /* URL tidak valid */ }
+    } else if (senderUrl.startsWith('file://')) return
+  }
+  throw new Error('Untrusted renderer IPC sender')
 }
 
 function validateCommand(command: string) {
@@ -404,6 +524,7 @@ function initDb() {
       approval_status TEXT NOT NULL DEFAULT 'not_required',
       review_status TEXT NOT NULL DEFAULT 'pending',
       review_notes TEXT,
+      blocked_reason TEXT,
       branch TEXT,
       budget_minutes INTEGER,
       source_type TEXT,
@@ -525,6 +646,7 @@ function initDb() {
   ensureColumn('tasks', 'approval_status', "TEXT NOT NULL DEFAULT 'not_required'")
   ensureColumn('tasks', 'review_status', "TEXT NOT NULL DEFAULT 'pending'")
   ensureColumn('tasks', 'review_notes', 'TEXT')
+  ensureColumn('tasks', 'blocked_reason', 'TEXT')
   ensureColumn('tasks', 'branch', 'TEXT')
   ensureColumn('tasks', 'budget_minutes', 'INTEGER')
   ensureColumn('tasks', 'source_type', 'TEXT')
@@ -586,6 +708,9 @@ function createWindow() {
     }
   })
 
+  win.webContents.on('will-navigate', event => event.preventDefault())
+  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+
   if (!app.isPackaged && process.env.ELECTRON_RENDERER_URL) {
     win.loadURL(process.env.ELECTRON_RENDERER_URL)
   } else {
@@ -611,7 +736,7 @@ function taskRow(id: string) {
     SELECT t.id, t.project_id AS projectId, t.title, t.prompt, t.status,
       t.agent_id AS agentId, t.result, t.error, t.mission_id AS missionId,
       t.approval_status AS approvalStatus, t.review_status AS reviewStatus,
-      t.review_notes AS reviewNotes, t.branch, t.budget_minutes AS budgetMinutes,
+      t.review_notes AS reviewNotes, t.blocked_reason AS blockedReason, t.branch, t.budget_minutes AS budgetMinutes,
       t.source_type AS sourceType, t.source_ref AS sourceRef, t.created_at AS createdAt,
       t.updated_at AS updatedAt, a.name AS agentName
     FROM tasks t LEFT JOIN agents a ON a.id=t.agent_id WHERE t.id=?
@@ -640,6 +765,40 @@ function dependenciesReady(taskId: string) {
   return !pending
 }
 
+function dependencyIdsReady(dependencyIds: string[]) {
+  return dependencyIds.every(dependencyId => {
+    const dependency = db.prepare('SELECT status FROM tasks WHERE id=?').get(dependencyId) as { status: TaskStatus } | undefined
+    return dependency?.status === 'done'
+  })
+}
+
+function isTaskStatus(value: unknown): value is TaskStatus {
+  return typeof value === 'string' && (taskStatuses as readonly string[]).includes(value)
+}
+
+function assertTaskTransition(current: TaskStatus, next: TaskStatus) {
+  if (current === next) return
+  if (!taskTransitions[current].includes(next)) throw new Error(`Invalid task transition: ${current} -> ${next}`)
+}
+
+function taskReadyStatus(agentId: string | null | undefined, taskId: string): TaskStatus {
+  if (!dependenciesReady(taskId)) return 'blocked'
+  return agentId ? 'assigned' : 'backlog'
+}
+
+function promoteDependentTasks(projectId: string) {
+  const candidates = db.prepare(`
+    SELECT id, status, agent_id AS agentId, approval_status AS approvalStatus, blocked_reason AS blockedReason
+    FROM tasks WHERE project_id=? AND status='blocked' AND blocked_reason='dependencies'
+  `).all(projectId) as Array<{ id: string; status: TaskStatus; agentId?: string | null; approvalStatus: string; blockedReason?: string | null }>
+  for (const task of candidates) {
+    if (task.approvalStatus === 'pending' || !dependenciesReady(task.id)) continue
+    const nextStatus = taskReadyStatus(task.agentId, task.id)
+    db.prepare('UPDATE tasks SET status=?, blocked_reason=NULL, updated_at=CURRENT_TIMESTAMP WHERE id=?').run(nextStatus, task.id)
+    recordEvent(getProject(projectId), task.agentId ?? null, 'task.unblocked', { taskId: task.id, status: nextStatus, reason: 'dependencies-complete' })
+  }
+}
+
 function refreshMissionStatus(missionId: string | null | undefined) {
   if (!missionId) return
   const counts = db.prepare('SELECT COUNT(*) AS total, SUM(status=\'done\') AS done, SUM(status=\'review\') AS review, SUM(status=\'failed\') AS failed, SUM(status=\'running\') AS running FROM tasks WHERE mission_id=?').get(missionId) as { total: number; done: number; review: number; failed: number; running: number }
@@ -655,7 +814,7 @@ function recoverInterruptedSessions() {
   for (const agent of interrupted) {
     const tasks = db.prepare("SELECT id, mission_id AS missionId FROM tasks WHERE agent_id=? AND status='running'").all(agent.id) as Array<{ id: string; missionId?: string | null }>
     for (const task of tasks) {
-      db.prepare("UPDATE tasks SET status='failed', error=?, updated_at=CURRENT_TIMESTAMP WHERE id=?")
+      db.prepare("UPDATE tasks SET status='failed', blocked_reason=NULL, error=?, updated_at=CURRENT_TIMESTAMP WHERE id=?")
         .run('Application restarted before the task completed', task.id)
       refreshMissionStatus(task.missionId)
     }
@@ -673,13 +832,9 @@ function profileForRequest(text: string) {
 }
 
 function profilePermissions(profileId: string | null | undefined) {
-  if (!profileId) return { filesystem: true, network: true, shell: true, git: true, secrets: false }
+  if (!profileId) return { ...defaultProfilePermissions }
   const row = db.prepare('SELECT permissions_json AS permissionsJson FROM profiles WHERE id=?').get(profileId) as { permissionsJson?: string } | undefined
-  try {
-    return { filesystem: true, network: true, shell: true, git: true, secrets: false, ...(row?.permissionsJson ? JSON.parse(row.permissionsJson) : {}) }
-  } catch {
-    return { filesystem: true, network: true, shell: true, git: true, secrets: false }
-  }
+  return parsePermissions(row?.permissionsJson)
 }
 
 function decomposeRequest(request: string) {
@@ -708,8 +863,8 @@ function processSchedules() {
       const approvalStatus = requiresApproval(schedule.prompt) ? 'pending' : 'not_required'
       const status: TaskStatus = approvalStatus === 'pending' ? 'blocked' : schedule.agentId ? 'assigned' : 'backlog'
       db.prepare(`UPDATE schedules SET next_run_at=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`).run(next.toISOString(), schedule.id)
-      db.prepare(`INSERT INTO tasks (id, project_id, title, prompt, status, agent_id, approval_status) VALUES (?, ?, ?, ?, ?, ?, ?)`)
-        .run(taskId, project.id, `[Schedule] ${schedule.name}`, schedule.prompt, status, schedule.agentId ?? null, approvalStatus)
+      db.prepare(`INSERT INTO tasks (id, project_id, title, prompt, status, agent_id, approval_status, blocked_reason) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+        .run(taskId, project.id, `[Schedule] ${schedule.name}`, schedule.prompt, status, schedule.agentId ?? null, approvalStatus, approvalStatus === 'pending' ? 'approval' : null)
       if (approvalStatus === 'pending') {
         db.prepare(`INSERT INTO approvals (id, project_id, task_id, type, title, reason, payload_json) VALUES (?, ?, ?, ?, ?, ?, ?)`)
           .run(randomUUID(), project.id, taskId, 'safety', `Approve scheduled task: ${schedule.name}`, 'Scheduled prompt contains a potentially destructive, scope-changing, or costly operation.', JSON.stringify({ prompt: schedule.prompt }))
@@ -728,8 +883,14 @@ function pruneExpiredMemories(projectId?: string) {
       WHERE project_id=? AND pinned=0 AND retention_days IS NOT NULL
       AND datetime(updated_at, '+' || retention_days || ' days') < CURRENT_TIMESTAMP`).all(project.id) as Array<{ id: string; filePath: string }>
     for (const memory of expired) {
-      fs.rmSync(memory.filePath, { force: true })
-      fs.rmSync(`${memory.filePath}.metadata`, { force: true })
+      try {
+        validateMemoryPath(project, memory.filePath)
+        fs.rmSync(memory.filePath, { force: true })
+        fs.rmSync(`${memory.filePath}.metadata`, { force: true })
+      } catch (error) {
+        recordEvent(project, null, 'memory.expiry-blocked', { memoryId: memory.id, reason: error instanceof Error ? error.message : 'invalid memory path' })
+        continue
+      }
       db.prepare('DELETE FROM memories WHERE id=?').run(memory.id)
       recordEvent(project, null, 'memory.expired', { memoryId: memory.id })
       removed += 1
@@ -745,6 +906,14 @@ function startScheduler() {
 }
 
 function registerIpc() {
+  const nativeHandle = ipcMain.handle.bind(ipcMain)
+  ipcMain.handle = ((channel, listener) => {
+    nativeHandle(channel, (event, ...args) => {
+      assertTrustedRenderer(event)
+      return listener(event, ...args)
+    })
+  }) as typeof ipcMain.handle
+
   ipcMain.handle('projects:list', () => {
     return db.prepare('SELECT id, name, path, default_branch AS defaultBranch, use_worktrees AS useWorktrees FROM projects ORDER BY name').all()
   })
@@ -783,11 +952,11 @@ function registerIpc() {
   ipcMain.handle('tasks:create', (_event, input: { id: string; projectId: string; title: string; prompt: string; agentId?: string | null; dependsOnTaskIds?: string[]; branch?: string | null; budgetMinutes?: number | null; sourceType?: string | null; sourceRef?: string | null }) => {
     validateIdentifier(input.id, 'Task id')
     const project = getProject(input.projectId)
-    if (!project) throw new Error('Project not found')
+    if (!project || typeof input.title !== 'string' || typeof input.prompt !== 'string' || !input.title.trim() || !input.prompt.trim()) throw new Error('Invalid task')
     const agentId = input.agentId || null
+    if (agentId && !db.prepare('SELECT 1 FROM agents WHERE id=? AND project_id=?').get(agentId, project.id)) throw new Error('Task agent must belong to the same project')
     const prompt = input.prompt.trim()
     const approvalStatus = requiresApproval(prompt) ? 'pending' : 'not_required'
-    const status: TaskStatus = approvalStatus === 'pending' ? 'blocked' : agentId ? 'assigned' : 'backlog'
     const budgetMinutes = input.budgetMinutes == null ? null : Math.floor(Number(input.budgetMinutes))
     if (budgetMinutes !== null && (!Number.isFinite(budgetMinutes) || budgetMinutes < 1)) throw new Error('Budget must be at least one minute')
     const dependencies = [...new Set(input.dependsOnTaskIds ?? [])]
@@ -795,10 +964,13 @@ function registerIpc() {
       const dependency = db.prepare('SELECT project_id AS projectId FROM tasks WHERE id=?').get(dependencyId) as { projectId: string } | undefined
       if (!dependency || dependency.projectId !== project.id || dependencyId === input.id) throw new Error('Invalid task dependency')
     }
+    const dependenciesReadyNow = dependencyIdsReady(dependencies)
+    const status: TaskStatus = approvalStatus === 'pending' || !dependenciesReadyNow ? 'blocked' : agentId ? 'assigned' : 'backlog'
+    const blockedReason = approvalStatus === 'pending' ? 'approval' : dependenciesReadyNow ? null : 'dependencies'
     const transaction = db.transaction(() => {
-      db.prepare(`INSERT INTO tasks (id, project_id, title, prompt, status, agent_id, approval_status, branch, budget_minutes, source_type, source_ref)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-        .run(input.id, project.id, input.title.trim(), prompt, status, agentId, approvalStatus, input.branch ?? null, budgetMinutes, input.sourceType ?? null, input.sourceRef ?? null)
+      db.prepare(`INSERT INTO tasks (id, project_id, title, prompt, status, agent_id, approval_status, blocked_reason, branch, budget_minutes, source_type, source_ref)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .run(input.id, project.id, input.title.trim(), prompt, status, agentId, approvalStatus, blockedReason, input.branch ?? null, budgetMinutes, input.sourceType ?? null, input.sourceRef ?? null)
       const insertDependency = db.prepare('INSERT INTO task_dependencies (task_id, depends_on_task_id) VALUES (?, ?)')
       for (const dependencyId of dependencies) insertDependency.run(input.id, dependencyId)
       if (approvalStatus === 'pending') {
@@ -807,44 +979,71 @@ function registerIpc() {
       }
     })
     transaction()
-    recordEvent(project, agentId, 'task.created', { taskId: input.id, title: input.title.trim(), approvalStatus, dependencies })
+    recordEvent(project, agentId, 'task.created', { taskId: input.id, title: input.title.trim(), approvalStatus, blockedReason, dependencies })
     return taskRow(input.id)
   })
 
   ipcMain.handle('tasks:update', (_event, input: { id: string; status?: TaskStatus; agentId?: string | null; result?: string | null; error?: string | null; reviewStatus?: 'pending' | 'approved' | 'changes_requested'; reviewNotes?: string | null; branch?: string | null }) => {
-    const task = db.prepare('SELECT id, project_id AS projectId, title, prompt, status, agent_id AS agentId, result, error FROM tasks WHERE id=?').get(input.id) as Task | undefined
+    const task = db.prepare('SELECT id, project_id AS projectId, title, prompt, status, agent_id AS agentId, result, error, review_status AS reviewStatus, review_notes AS reviewNotes, blocked_reason AS blockedReason, branch FROM tasks WHERE id=?').get(input.id) as Task | undefined
     if (!task) throw new Error('Task not found')
     const agentId = input.agentId === undefined ? task.agentId ?? null : input.agentId
-    const status = input.status ?? task.status
+    const requestedStatus = input.status ?? task.status
+    if (!isTaskStatus(requestedStatus)) throw new Error('Invalid task status')
+    let status = requestedStatus
+    let blockedReason = task.blockedReason ?? null
     if (agentId && !db.prepare('SELECT 1 FROM agents WHERE id=? AND project_id=?').get(agentId, task.projectId)) throw new Error('Task agent must belong to the same project')
-    db.prepare(`UPDATE tasks SET status=?, agent_id=?, result=COALESCE(?, result), error=COALESCE(?, error),
-      review_status=COALESCE(?, review_status), review_notes=COALESCE(?, review_notes), branch=COALESCE(?, branch), updated_at=CURRENT_TIMESTAMP WHERE id=?`)
-      .run(status, agentId, input.result ?? null, input.error ?? null, input.reviewStatus ?? null, input.reviewNotes ?? null, input.branch ?? null, input.id)
+    if (status === 'running' && (!agentId || !sessions.has(agentId))) throw new Error('Start the assigned agent before marking a task as running')
+    if (task.approvalStatus === 'pending' && status !== 'blocked') throw new Error('Task is waiting for human approval')
+    if ((status === 'assigned' || status === 'backlog') && !dependenciesReady(task.id)) {
+      status = 'blocked'
+      blockedReason = 'dependencies'
+    } else if (status === 'blocked') {
+      blockedReason = task.blockedReason === 'approval' ? 'approval' : 'manual'
+    } else {
+      blockedReason = null
+    }
+    if (status === 'assigned' && !agentId) status = 'backlog'
+    assertTaskTransition(task.status, status)
+    if (agentId && agentId !== task.agentId && sessions.has(agentId)) throw new Error('Agent is already running another session')
+    const result = input.result === undefined ? (task.status === 'failed' && status !== 'failed' ? null : task.result ?? null) : input.result
+    const error = input.error === undefined ? (task.status === 'failed' && status !== 'failed' ? null : task.error ?? null) : input.error
+    const branch = input.branch === undefined ? task.branch ?? null : input.branch
+    const reviewStatus = input.reviewStatus === undefined ? task.reviewStatus ?? 'pending' : input.reviewStatus
+    const reviewNotes = input.reviewNotes === undefined ? task.reviewNotes ?? null : input.reviewNotes
+    db.prepare(`UPDATE tasks SET status=?, agent_id=?, result=?, error=?,
+      review_status=?, review_notes=?, blocked_reason=?, branch=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`)
+      .run(status, agentId, result, error, reviewStatus, reviewNotes, blockedReason, branch, input.id)
     recordEvent(getProject(task.projectId), agentId, 'task.updated', { taskId: input.id, status })
     const mission = db.prepare('SELECT mission_id AS missionId FROM tasks WHERE id=?').get(input.id) as { missionId?: string | null } | undefined
     refreshMissionStatus(mission?.missionId)
+    if (status === 'done') promoteDependentTasks(task.projectId)
     return taskRow(input.id)
   })
 
   ipcMain.handle('tasks:add-artifact', (_event, input: { taskId: string; label: string; kind?: string; location: string; metadata?: Record<string, unknown> }) => {
     const task = db.prepare('SELECT project_id AS projectId FROM tasks WHERE id=?').get(input.taskId) as { projectId: string } | undefined
-    if (!task || !input.label.trim() || !input.location.trim()) throw new Error('Invalid task artifact')
+    const project = task ? getProject(task.projectId) : undefined
+    if (!task || !project || typeof input.label !== 'string' || !input.label.trim()) throw new Error('Invalid task artifact')
+    const location = validateArtifactLocation(project, input.location)
+    const kind = typeof input.kind === 'string' && input.kind.trim() ? input.kind.trim().slice(0, 40) : 'file'
     const artifactId = randomUUID()
     db.prepare('INSERT INTO task_artifacts (id, task_id, label, kind, location, metadata_json) VALUES (?, ?, ?, ?, ?, ?)')
-      .run(artifactId, input.taskId, input.label.trim(), input.kind?.trim() || 'file', input.location.trim(), JSON.stringify(input.metadata ?? {}))
+      .run(artifactId, input.taskId, input.label.trim().slice(0, 200), kind, location, JSON.stringify(redactPayload(input.metadata ?? {})))
     recordEvent(getProject(task.projectId), null, 'task.artifact-added', { taskId: input.taskId, artifactId })
     return taskRow(input.taskId)
   })
 
   ipcMain.handle('tasks:set-review', (_event, input: { taskId: string; status: 'pending' | 'approved' | 'changes_requested'; notes?: string }) => {
-    const task = db.prepare('SELECT project_id AS projectId FROM tasks WHERE id=?').get(input.taskId) as { projectId: string } | undefined
+    const task = db.prepare('SELECT project_id AS projectId, status FROM tasks WHERE id=?').get(input.taskId) as { projectId: string; status: TaskStatus } | undefined
     if (!task) throw new Error('Task not found')
     const nextTaskStatus: TaskStatus = input.status === 'approved' ? 'done' : input.status === 'changes_requested' ? 'blocked' : 'review'
-    db.prepare('UPDATE tasks SET review_status=?, review_notes=?, status=?, updated_at=CURRENT_TIMESTAMP WHERE id=?')
-      .run(input.status, input.notes?.trim() || null, nextTaskStatus, input.taskId)
+    assertTaskTransition(task.status, nextTaskStatus)
+    db.prepare('UPDATE tasks SET review_status=?, review_notes=?, status=?, blocked_reason=?, updated_at=CURRENT_TIMESTAMP WHERE id=?')
+      .run(input.status, input.notes?.trim() || null, nextTaskStatus, nextTaskStatus === 'blocked' ? 'review' : null, input.taskId)
     recordEvent(getProject(task.projectId), null, 'task.reviewed', { taskId: input.taskId, status: input.status })
     const mission = db.prepare('SELECT mission_id AS missionId FROM tasks WHERE id=?').get(input.taskId) as { missionId?: string | null } | undefined
     refreshMissionStatus(mission?.missionId)
+    if (nextTaskStatus === 'done') promoteDependentTasks(task.projectId)
     return taskRow(input.taskId)
   })
 
@@ -874,9 +1073,9 @@ function registerIpc() {
         const taskId = randomUUID()
         const approvalStatus = requiresApproval(part) ? 'pending' : 'not_required'
         const status: TaskStatus = approvalStatus === 'pending' ? 'blocked' : candidate ? 'assigned' : 'backlog'
-        db.prepare(`INSERT INTO tasks (id, project_id, title, prompt, status, agent_id, mission_id, approval_status)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
-          .run(taskId, project.id, `${index + 1}. ${part.slice(0, 100)}`, part, status, candidate?.id ?? null, missionId, approvalStatus)
+        db.prepare(`INSERT INTO tasks (id, project_id, title, prompt, status, agent_id, mission_id, approval_status, blocked_reason)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+          .run(taskId, project.id, `${index + 1}. ${part.slice(0, 100)}`, part, status, candidate?.id ?? null, missionId, approvalStatus, approvalStatus === 'pending' ? 'approval' : null)
         createdTaskIds.push(taskId)
         if (approvalStatus === 'pending') {
           db.prepare(`INSERT INTO approvals (id, project_id, task_id, type, title, reason, payload_json) VALUES (?, ?, ?, ?, ?, ?, ?)`)
@@ -953,8 +1152,16 @@ function registerIpc() {
     const transaction = db.transaction(() => {
       db.prepare("UPDATE approvals SET status=?, resolved_at=CURRENT_TIMESTAMP WHERE id=?").run(input.status, input.id)
       if (approval.taskId) {
-        db.prepare("UPDATE tasks SET approval_status=?, status=CASE WHEN ?='approved' AND status='blocked' THEN CASE WHEN agent_id IS NULL THEN 'backlog' ELSE 'assigned' END ELSE status END, updated_at=CURRENT_TIMESTAMP WHERE id=?")
-          .run(input.status, input.status, approval.taskId)
+        const task = db.prepare('SELECT agent_id AS agentId, status FROM tasks WHERE id=?').get(approval.taskId) as { agentId?: string | null; status: TaskStatus } | undefined
+        if (task && input.status === 'approved') {
+          const nextStatus = taskReadyStatus(task.agentId, approval.taskId)
+          assertTaskTransition(task.status, nextStatus)
+          db.prepare("UPDATE tasks SET approval_status='approved', status=?, blocked_reason=?, updated_at=CURRENT_TIMESTAMP WHERE id=?")
+            .run(nextStatus, nextStatus === 'blocked' ? 'dependencies' : null, approval.taskId)
+        } else if (task) {
+          db.prepare("UPDATE tasks SET approval_status='rejected', status='blocked', blocked_reason='approval', updated_at=CURRENT_TIMESTAMP WHERE id=?")
+            .run(approval.taskId)
+        }
       }
       if (input.status === 'rejected' && approval.type === 'config-change') {
         const project = getProject(approval.projectId)
@@ -968,12 +1175,8 @@ function registerIpc() {
 
   ipcMain.handle('config:prepare', (_event, input: { projectId: string; path: string; content: string }) => {
     const project = getProject(input.projectId)
-    const configPath = resolve(input.path)
-    if (!project || !input.path || !isDirectory(dirname(configPath))) throw new Error('Config path parent does not exist')
-    if (fs.existsSync(configPath)) {
-      const fileStat = fs.lstatSync(configPath)
-      if (fileStat.isSymbolicLink() || fileStat.isDirectory()) throw new Error('Config path must be a regular file, not a symlink or directory')
-    }
+    if (!project || typeof input.path !== 'string' || typeof input.content !== 'string') throw new Error('Invalid config change')
+    const configPath = validateConfigPath(project, input.path)
     const current = fs.existsSync(configPath) ? fs.readFileSync(configPath, 'utf8') : ''
     const diff = unifiedDiff(current, input.content)
     if (diff === '(no changes)') throw new Error('Config has no changes')
@@ -996,7 +1199,7 @@ function registerIpc() {
     const pending = JSON.parse(fs.readFileSync(pendingPath, 'utf8')) as { projectId?: string; path: string; content: string }
     const approvedDetails = JSON.parse(approval.payloadJson) as { path?: string }
     if (pending.projectId !== approval.projectId || !approvedDetails.path || resolve(pending.path) !== resolve(approvedDetails.path)) throw new Error('Pending config does not match the approved diff')
-    const configPath = resolve(pending.path)
+    const configPath = validateConfigPath(project, pending.path)
     const current = fs.existsSync(configPath) ? fs.readFileSync(configPath, 'utf8') : ''
     const backupPath = fs.existsSync(configPath) ? `${configPath}.agent-office.bak-${Date.now()}` : null
     if (backupPath) fs.copyFileSync(configPath, backupPath)
@@ -1239,10 +1442,13 @@ function registerIpc() {
   ipcMain.handle('memories:remove', (_event, id: string) => {
     const memory = db.prepare('SELECT project_id AS projectId, file_path AS filePath FROM memories WHERE id=?').get(id) as { projectId: string; filePath: string } | undefined
     if (!memory) return false
+    const project = getProject(memory.projectId)
+    if (!project) throw new Error('Memory project not found')
+    validateMemoryPath(project, memory.filePath)
     fs.rmSync(memory.filePath, { force: true })
     fs.rmSync(`${memory.filePath}.metadata`, { force: true })
     db.prepare('DELETE FROM memories WHERE id=?').run(id)
-    recordEvent(getProject(memory.projectId), null, 'memory.removed', { memoryId: id })
+    recordEvent(project, null, 'memory.removed', { memoryId: id })
     return true
   })
 
@@ -1260,13 +1466,13 @@ function registerIpc() {
 
   ipcMain.handle('profiles:list', () => {
     return (db.prepare('SELECT id, name, role, command, soul, permissions_json AS permissionsJson, built_in AS builtIn FROM profiles ORDER BY built_in DESC, name').all() as Array<{ permissionsJson: string } & Record<string, unknown>>)
-      .map(profile => ({ ...profile, permissions: JSON.parse(profile.permissionsJson), permissionsJson: undefined }))
+      .map(profile => ({ ...profile, permissions: parsePermissions(profile.permissionsJson), permissionsJson: undefined }))
   })
 
   ipcMain.handle('profiles:create', (_event, input: Omit<AgentProfile, 'builtIn'>) => {
     validateIdentifier(input.id, 'Profile id')
     const command = validateCommand(input.command)
-    const permissions = input.permissions ?? {}
+    const permissions = normalizePermissions(input.permissions)
     db.prepare('INSERT INTO profiles (id, name, role, command, soul, permissions_json, built_in) VALUES (?, ?, ?, ?, ?, ?, 0)')
       .run(input.id, input.name.trim(), input.role.trim(), command, input.soul.trim(), JSON.stringify(permissions))
     return { ...input, name: input.name.trim(), role: input.role.trim(), command, soul: input.soul.trim(), permissions, builtIn: 0 }
@@ -1275,13 +1481,13 @@ function registerIpc() {
   ipcMain.handle('profiles:update', (_event, input: Omit<AgentProfile, 'builtIn'>) => {
     validateIdentifier(input.id, 'Profile id')
     const command = validateCommand(input.command)
-    const permissions = input.permissions ?? {}
+    const permissions = normalizePermissions(input.permissions)
     db.prepare('UPDATE profiles SET name=?, role=?, command=?, soul=?, permissions_json=? WHERE id=? AND built_in=0')
       .run(input.name.trim(), input.role.trim(), command, input.soul.trim(), JSON.stringify(permissions), input.id)
     db.prepare('UPDATE agents SET name=?, role=?, command=? WHERE profile_id=?')
       .run(input.name.trim(), input.role.trim(), command, input.id)
     const profile = db.prepare('SELECT id, name, role, command, soul, permissions_json AS permissionsJson, built_in AS builtIn FROM profiles WHERE id=?').get(input.id) as { permissionsJson: string } & Record<string, unknown>
-    return { ...profile, permissions: JSON.parse(profile.permissionsJson), permissionsJson: undefined }
+    return { ...profile, permissions: parsePermissions(profile.permissionsJson), permissionsJson: undefined }
   })
 
   ipcMain.handle('profiles:remove', (_event, id: string) => {
@@ -1319,6 +1525,7 @@ function registerIpc() {
     const profile = input.profileId
       ? db.prepare('SELECT role, command FROM profiles WHERE id=?').get(input.profileId) as { role: string; command: string } | undefined
       : undefined
+    if (input.profileId && !profile) throw new Error('Profile not found')
     const role = profile?.role ?? input.role
     const command = profile?.command ?? requestedCommand
     const workspace = project ? createWorktree(project, input.id) : { cwd: input.cwd || os.homedir(), worktreePath: null, branch: null }
@@ -1343,40 +1550,65 @@ function registerIpc() {
   })
 
   ipcMain.handle('agent:start', (event, agent: Agent & { taskId?: string; taskPrompt?: string }) => {
-    if (sessions.has(agent.id)) return true
-    const command = validateCommand(agent.command)
+    if (!agent || typeof agent.id !== 'string') throw new Error('Invalid agent start request')
+    const storedAgent = db.prepare(`
+      SELECT id, name, command, cwd, role, project_id AS projectId,
+        worktree_path AS worktreePath, branch, profile_id AS profileId, status
+      FROM agents WHERE id=?
+    `).get(agent.id) as Agent | undefined
+    if (!storedAgent) throw new Error('Agent not found')
+    const taskId = typeof agent.taskId === 'string' ? agent.taskId : undefined
+    if (sessions.has(storedAgent.id)) {
+      if (taskId) throw new Error('Agent already has an active session')
+      return true
+    }
+    const command = validateCommand(storedAgent.command)
     const shell = terminalShell(command)
-    const profile = agent.profileId
-      ? db.prepare('SELECT name, soul FROM profiles WHERE id=?').get(agent.profileId) as { name: string; soul: string } | undefined
+    const profile = storedAgent.profileId
+      ? db.prepare('SELECT name, soul FROM profiles WHERE id=?').get(storedAgent.profileId) as { name: string; soul: string } | undefined
       : undefined
-    const permissions = profilePermissions(agent.profileId)
+    const permissions = profilePermissions(storedAgent.profileId)
     if (!permissions.shell) throw new Error('Agent profile does not allow shell execution')
-    const project = agent.projectId ? getProject(agent.projectId) : undefined
-    const cwd = agent.worktreePath || agent.cwd || project?.path || os.homedir()
-    if (agent.taskId) {
-      const task = db.prepare('SELECT approval_status AS approvalStatus, budget_minutes AS budgetMinutes FROM tasks WHERE id=? AND agent_id=?').get(agent.taskId, agent.id) as { approvalStatus: string; budgetMinutes?: number | null } | undefined
+    const project = storedAgent.projectId ? getProject(storedAgent.projectId) : undefined
+    if (storedAgent.projectId && !project) throw new Error('Agent project not found')
+    const cwd = resolve(storedAgent.worktreePath || (project && storedAgent.cwd === '.' ? project.path : storedAgent.cwd) || project?.path || os.homedir())
+    if (!isDirectory(cwd)) throw new Error('Agent workspace does not exist or is not a directory')
+    if (project) {
+      const worktreeRoot = join(app.getPath('userData'), 'worktrees', safePathSegment(project.id))
+      if (!isCanonicalPathInside(project.path, cwd) && !isCanonicalPathInside(worktreeRoot, cwd)) {
+        throw new Error('Agent workspace is outside the project or its worktree directory')
+      }
+    }
+    let taskPrompt = ''
+    if (taskId) {
+      const task = db.prepare('SELECT status, approval_status AS approvalStatus, budget_minutes AS budgetMinutes, blocked_reason AS blockedReason, prompt FROM tasks WHERE id=? AND agent_id=?').get(taskId, storedAgent.id) as { status: TaskStatus; approvalStatus: string; budgetMinutes?: number | null; blockedReason?: string | null; prompt: string } | undefined
       if (!task) throw new Error('Task is not assigned to this agent')
+      taskPrompt = task.prompt
+      if (task.status === 'running' || taskRuns.has(taskId)) throw new Error('Task is already running')
+      if (!['backlog', 'assigned', 'blocked', 'failed'].includes(task.status)) throw new Error(`Task cannot be started from ${task.status}`)
       if (task.approvalStatus === 'pending') throw new Error('Task is waiting for human approval')
       if (task.approvalStatus === 'rejected') throw new Error('Task approval was rejected')
-      if (!dependenciesReady(agent.taskId)) {
-        db.prepare("UPDATE tasks SET status='blocked', updated_at=CURRENT_TIMESTAMP WHERE id=?").run(agent.taskId)
-        recordEvent(project, agent.id, 'task.blocked', { taskId: agent.taskId, reason: 'dependencies' })
+      if (task.blockedReason === 'manual') throw new Error('Task is manually blocked')
+      if (!dependenciesReady(taskId)) {
+        db.prepare("UPDATE tasks SET status='blocked', blocked_reason='dependencies', updated_at=CURRENT_TIMESTAMP WHERE id=?").run(taskId)
+        recordEvent(project, storedAgent.id, 'task.blocked', { taskId, reason: 'dependencies' })
         throw new Error('Task dependencies are not complete')
       }
-      db.prepare("UPDATE tasks SET status='running', updated_at=CURRENT_TIMESTAMP WHERE id=?").run(agent.taskId)
+      assertTaskTransition(task.status, 'running')
+      db.prepare("UPDATE tasks SET status='running', blocked_reason=NULL, updated_at=CURRENT_TIMESTAMP WHERE id=?").run(taskId)
       const runId = randomUUID()
-      taskRuns.set(agent.taskId, { id: runId, startedAt: Date.now() })
+      taskRuns.set(taskId, { id: runId, startedAt: Date.now() })
       db.prepare('INSERT INTO execution_usage (id, task_id, agent_id, started_at) VALUES (?, ?, ?, ?)')
-        .run(runId, agent.taskId, agent.id, new Date().toISOString())
+        .run(runId, taskId, storedAgent.id, new Date().toISOString())
       if (task.budgetMinutes && task.budgetMinutes > 0) {
         const timeout = setTimeout(() => {
-          if (!sessions.has(agent.id)) return
-          recordEvent(project, agent.id, 'task.budget-exceeded', { taskId: agent.taskId, budgetMinutes: task.budgetMinutes })
-          sessions.get(agent.id)?.kill()
+          if (!sessions.has(storedAgent.id)) return
+          recordEvent(project, storedAgent.id, 'task.budget-exceeded', { taskId, budgetMinutes: task.budgetMinutes })
+          sessions.get(storedAgent.id)?.kill()
         }, task.budgetMinutes * 60_000)
-        taskTimeouts.set(agent.taskId, timeout)
+        taskTimeouts.set(taskId, timeout)
       }
-      recordEvent(project, agent.id, 'task.started', { taskId: agent.taskId })
+      recordEvent(project, storedAgent.id, 'task.started', { taskId })
     }
     const environment = { ...process.env } as Record<string, string>
     if (!permissions.secrets) {
@@ -1389,7 +1621,7 @@ function registerIpc() {
     environment.AGENT_OFFICE_GIT_ALLOWED = permissions.git ? '1' : '0'
     environment.AGENT_OFFICE_SECRETS_ALLOWED = permissions.secrets ? '1' : '0'
     const injectedSoul = permissions.secrets ? profile?.soul ?? '' : redactSecrets(profile?.soul ?? '')
-    const injectedPrompt = permissions.secrets ? agent.taskPrompt ?? '' : redactSecrets(agent.taskPrompt ?? '')
+    const injectedPrompt = permissions.secrets ? taskPrompt : redactSecrets(taskPrompt)
     const term = pty.spawn(shell.shell, shell.args, {
       name: 'xterm-256color',
       cols: 120,
@@ -1399,48 +1631,61 @@ function registerIpc() {
         ...environment,
         AGENT_OFFICE_PROFILE: profile?.name ?? '',
         AGENT_OFFICE_SOUL: injectedSoul,
-        AGENT_OFFICE_TASK_ID: agent.taskId ?? '',
+        AGENT_OFFICE_TASK_ID: taskId ?? '',
         AGENT_OFFICE_TASK_PROMPT: injectedPrompt,
       } as Record<string, string>
     })
-    sessions.set(agent.id, term)
-    circuitStates.set(agent.id, { steerCount: 0, lastSteerAt: 0, constrained: false })
-    if (agent.taskId) taskOutputs.set(agent.taskId, '')
-    db.prepare("UPDATE agents SET status='working' WHERE id=?").run(agent.id)
+    sessions.set(storedAgent.id, term)
+    circuitStates.set(storedAgent.id, { steerCount: 0, lastSteerAt: 0, constrained: false })
+    if (taskId) taskOutputs.set(taskId, '')
+    db.prepare("UPDATE agents SET status='working' WHERE id=?").run(storedAgent.id)
     term.onData(data => {
-      if (agent.taskId) taskOutputs.set(agent.taskId, `${taskOutputs.get(agent.taskId) ?? ''}${data}`.slice(-100_000))
-      event.sender.send('terminal:data', { id: agent.id, data })
+      if (taskId) taskOutputs.set(taskId, `${taskOutputs.get(taskId) ?? ''}${data}`.slice(-100_000))
+      event.sender.send('terminal:data', { id: storedAgent.id, data })
     })
     term.onExit(({ exitCode }) => {
-      sessions.delete(agent.id)
-      circuitStates.delete(agent.id)
+      sessions.delete(storedAgent.id)
+      circuitStates.delete(storedAgent.id)
       if (quitting) return
-      db.prepare("UPDATE agents SET status=? WHERE id=?").run(exitCode === 0 ? 'idle' : 'error', agent.id)
-      if (agent.taskId) {
-        const timeout = taskTimeouts.get(agent.taskId)
+      db.prepare("UPDATE agents SET status=? WHERE id=?").run(exitCode === 0 ? 'idle' : 'error', storedAgent.id)
+      if (taskId) {
+        const timeout = taskTimeouts.get(taskId)
         if (timeout) clearTimeout(timeout)
-        taskTimeouts.delete(agent.taskId)
+        taskTimeouts.delete(taskId)
         const taskStatus: TaskStatus = exitCode === 0 ? 'review' : 'failed'
-        const output = redactSecrets(taskOutputs.get(agent.taskId) ?? '')
-        taskOutputs.delete(agent.taskId)
-        const run = taskRuns.get(agent.taskId)
-        taskRuns.delete(agent.taskId)
+        const output = redactSecrets(taskOutputs.get(taskId) ?? '')
+        taskOutputs.delete(taskId)
+        const run = taskRuns.get(taskId)
+        taskRuns.delete(taskId)
         if (run) db.prepare('UPDATE execution_usage SET finished_at=?, duration_ms=?, output_bytes=?, exit_code=? WHERE id=?')
           .run(new Date().toISOString(), Date.now() - run.startedAt, Buffer.byteLength(output, 'utf8'), exitCode, run.id)
-        db.prepare("UPDATE tasks SET status=?, updated_at=CURRENT_TIMESTAMP, result=?, error=?, branch=COALESCE(branch, ?) WHERE id=?").run(taskStatus, exitCode === 0 ? output : null, exitCode === 0 ? null : `Process exited with code ${exitCode}`, agent.branch ?? null, agent.taskId)
+        db.prepare("UPDATE tasks SET status=?, blocked_reason=NULL, updated_at=CURRENT_TIMESTAMP, result=?, error=?, branch=COALESCE(branch, ?) WHERE id=?").run(taskStatus, exitCode === 0 ? output : null, exitCode === 0 ? null : `Process exited with code ${exitCode}`, storedAgent.branch ?? null, taskId)
         
-      const mission = db.prepare('SELECT mission_id AS missionId FROM tasks WHERE id=?').get(agent.taskId) as { missionId?: string | null } | undefined
+      const mission = db.prepare('SELECT mission_id AS missionId FROM tasks WHERE id=?').get(taskId) as { missionId?: string | null } | undefined
       refreshMissionStatus(mission?.missionId)
-        recordEvent(project, agent.id, 'task.finished', { taskId: agent.taskId, status: taskStatus, exitCode })
+        recordEvent(project, storedAgent.id, 'task.finished', { taskId, status: taskStatus, exitCode })
+        if (taskStatus === 'review' && project) promoteDependentTasks(project.id)
       }
-      event.sender.send('agent:exit', { id: agent.id, exitCode })
+      event.sender.send('agent:exit', { id: storedAgent.id, exitCode })
     })
-    if (agent.taskId && agent.taskPrompt) setTimeout(() => term.write(`${agent.taskPrompt}\r`), 750)
+    if (taskId && taskPrompt) setTimeout(() => term.write(`${taskPrompt}\r`), 750)
     return true
   })
 
-  ipcMain.on('terminal:write', (_event, { id, data }) => sessions.get(id)?.write(data))
-  ipcMain.on('terminal:resize', (_event, { id, cols, rows }) => sessions.get(id)?.resize(cols, rows))
+  ipcMain.on('terminal:write', (event, payload: unknown) => {
+    assertTrustedRenderer(event)
+    if (!payload || typeof payload !== 'object') return
+    const { id, data } = payload as { id?: unknown; data?: unknown }
+    if (typeof id !== 'string' || typeof data !== 'string' || data.length > 100_000) return
+    sessions.get(id)?.write(data)
+  })
+  ipcMain.on('terminal:resize', (event, payload: unknown) => {
+    assertTrustedRenderer(event)
+    if (!payload || typeof payload !== 'object') return
+    const { id, cols, rows } = payload as { id?: unknown; cols?: unknown; rows?: unknown }
+    if (typeof id !== 'string' || !Number.isInteger(cols) || !Number.isInteger(rows) || Number(cols) < 1 || Number(cols) > 500 || Number(rows) < 1 || Number(rows) > 500) return
+    sessions.get(id)?.resize(Number(cols), Number(rows))
+  })
   ipcMain.handle('agent:stop', (_event, id: string) => {
     const session = sessions.get(id)
     if (!session) return false
@@ -1542,6 +1787,8 @@ function registerIpc() {
       }
     })
   })
+
+  ipcMain.handle = nativeHandle
 }
 
 app.whenReady().then(() => {

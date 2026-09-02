@@ -5,7 +5,7 @@ declare global {
   type TaskStatus = 'backlog'|'assigned'|'running'|'blocked'|'review'|'done'|'failed'
   type TaskArtifact = { id:string; label:string; kind:string; location:string; metadata:Record<string, unknown>; createdAt:string }
   type TaskDependency = { id:string; title:string; status:TaskStatus }
-  type Task = { id:string; projectId:string; title:string; prompt:string; status:TaskStatus; agentId?:string|null; agentName?:string|null; result?:string|null; error?:string|null; missionId?:string|null; approvalStatus?:'not_required'|'pending'|'approved'|'rejected'; reviewStatus?:'pending'|'approved'|'changes_requested'; reviewNotes?:string|null; branch?:string|null; dependencies?:TaskDependency[]; artifacts?:TaskArtifact[] }
+  type Task = { id:string; projectId:string; title:string; prompt:string; status:TaskStatus; agentId?:string|null; agentName?:string|null; result?:string|null; error?:string|null; missionId?:string|null; approvalStatus?:'not_required'|'pending'|'approved'|'rejected'; reviewStatus?:'pending'|'approved'|'changes_requested'; reviewNotes?:string|null; blockedReason?:string|null; branch?:string|null; dependencies?:TaskDependency[]; artifacts?:TaskArtifact[] }
   type Mission = { id:string; projectId:string; title:string; request:string; status:string; createdAt:string; updatedAt?:string }
   type Schedule = { id:string; projectId:string; name:string; prompt:string; agentId?:string|null; agentName?:string|null; intervalMinutes:number; timezone:string; nextRunAt:string; enabled:number }
   type Approval = { id:string; projectId:string; taskId?:string|null; taskTitle?:string; type:string; title:string; reason:string; status:'pending'|'approved'|'rejected'; createdAt:string; resolvedAt?:string|null }
