@@ -23,6 +23,13 @@ function errorMessage(error: unknown) {
   return 'Operasi gagal. Periksa input lalu coba lagi.'
 }
 
+function formatDuration(milliseconds: number) {
+  if (milliseconds < 1_000) return `${milliseconds} ms`
+  const seconds = Math.round(milliseconds / 1_000)
+  if (seconds < 60) return `${seconds} s`
+  return `${Math.floor(seconds / 60)}m ${seconds % 60}s`
+}
+
 /** Menjalankan refresh berkala hanya saat window terlihat dan tanpa request overlap. */
 function useVisiblePolling(callback: () => Promise<void>, intervalMs: number, dependencies: React.DependencyList) {
   useEffect(() => {
@@ -334,7 +341,7 @@ type AppView = 'dashboard' | 'floor' | 'agents' | 'workspaces' | 'command' | 'in
 function DashboardCenter({ project, agents, fleet, onSelect }: { project: Project | null; agents: Agent[]; fleet: FleetSummary | null; onSelect: (id: string) => void }) {
   return <section className="dashboard-center">
     <div className="dashboard-hero panel-card"><div><span className="eyebrow">OPERATIONS OVERVIEW</span><h2>{project ? project.name : 'Welcome to Agent Office'}</h2><p>{project ? 'Your local worker fleet at a glance.' : 'Create a workspace to start running agents.'}</p></div><div className="live-pill"><i /> LIVE</div></div>
-    <div className="dashboard-stats"><div className="panel-card"><span>Agents online</span><strong>{fleet?.agents.total ?? agents.length}</strong><small>{fleet?.agents.working ?? agents.filter(agent => agent.status === 'working').length} working now</small></div><div className="panel-card"><span>Queued tasks</span><strong>{fleet?.tasks.queued ?? 0}</strong><small>{fleet?.tasks.running ?? 0} running</small></div><div className="panel-card"><span>Approvals</span><strong>{fleet?.approvals.pending ?? 0}</strong><small>waiting for review</small></div><div className="panel-card"><span>CLI engines</span><strong>Local</strong><small>PTY sessions enabled</small></div></div>
+    <div className="dashboard-stats"><div className="panel-card"><span>Agents online</span><strong>{fleet?.agents.total ?? agents.length}</strong><small>{fleet?.agents.working ?? agents.filter(agent => agent.status === 'working').length} working now</small></div><div className="panel-card"><span>Queued tasks</span><strong>{fleet?.tasks.queued ?? 0}</strong><small>{fleet?.tasks.running ?? 0} running</small></div><div className="panel-card"><span>Approvals</span><strong>{fleet?.approvals.pending ?? 0}</strong><small>waiting for review</small></div><div className="panel-card"><span>Execution usage</span><strong>{formatDuration(fleet?.usage.durationMs ?? 0)}</strong><small>{fleet?.usage.outputBytes ?? 0} output bytes</small></div></div>
     <div className="panel-card dashboard-office"><div className="panel-title"><h3>Live office floor</h3><span>{agents.length ? 'Click an agent to inspect' : 'No agents yet'}</span></div><OfficeFloor agents={agents} projectId={project?.id} onSelect={onSelect} /></div>
   </section>
 }

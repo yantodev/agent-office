@@ -15,6 +15,7 @@ import { pruneExpiredMemories, startScheduler } from './scheduler'
 import { startMailboxRouter } from './mailbox'
 import { migrateDatabase, openDatabase } from './database'
 import { interruptAgent, spawnAgentSession, submitAgentPrompt } from './agent-session'
+import { summarizeExecutionUsage } from './telemetry'
 
 type AgentStatus = 'idle' | 'working' | 'paused' | 'error' | 'offline'
 
@@ -1101,7 +1102,8 @@ function registerIpc() {
     const tasks = db.prepare(`SELECT COUNT(*) AS total, SUM(status IN ('backlog','assigned')) AS queued,
       SUM(status='running') AS running, SUM(status='failed') AS errors FROM tasks WHERE project_id=?`).get(project) as Record<string, number>
     const approvals = db.prepare("SELECT COUNT(*) AS pending FROM approvals WHERE project_id=? AND status='pending'").get(project) as { pending: number }
-    const usage = db.prepare('SELECT COALESCE(SUM(duration_ms), 0) AS durationMs, COALESCE(SUM(output_bytes), 0) AS outputBytes FROM execution_usage u JOIN tasks t ON t.id=u.task_id WHERE t.project_id=?').get(project) as { durationMs: number; outputBytes: number }
+    const usageRows = db.prepare('SELECT duration_ms AS durationMs, output_bytes AS outputBytes FROM execution_usage u JOIN tasks t ON t.id=u.task_id WHERE t.project_id=?').all(project) as Array<{ durationMs?: number | null; outputBytes?: number | null }>
+    const usage = summarizeExecutionUsage(usageRows)
     return { agents, tasks, approvals, usage }
   })
 

@@ -9,6 +9,7 @@ const { executionPlan } = await import('../src/main/permission-policy.ts')
 const { providerAdapter } = await import('../src/main/provider-adapters.ts')
 const { canonicalPath, isCanonicalPathInside, redactSecrets } = await import('../src/main/security.ts')
 const { writeJsonAtomic } = await import('../src/main/persistence.ts')
+const { summarizeExecutionUsage } = await import('../src/main/telemetry.ts')
 
 test('task lifecycle rejects invalid transitions and resolves readiness', () => {
   assert.equal(isTaskStatus('review'), true)
@@ -72,4 +73,8 @@ test('atomic persistence leaves valid JSON after concurrent writes', async () =>
   const value = JSON.parse(fs.readFileSync(target, 'utf8'))
   assert.equal(typeof value.id, 'number')
   assert.equal(fs.readdirSync(directory).some(file => file.endsWith('.tmp')), false)
+})
+
+test('telemetry aggregation only reports local execution usage', () => {
+  assert.deepEqual(summarizeExecutionUsage([{ durationMs: 120, outputBytes: 10 }, { durationMs: null, outputBytes: 5 }]), { durationMs: 120, outputBytes: 15 })
 })

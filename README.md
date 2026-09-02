@@ -135,6 +135,12 @@ The configured application identifier is `com.agentoffice.desktop`. The default 
 
 Build artifacts are generated in `dist/` and are intentionally ignored by Git.
 
+## Local data, telemetry, and backup
+
+Agent Office keeps the SQLite registry and execution telemetry in Electron's user-data directory. Project coordination files are stored in each workspace's `.agent-office/` directory. Telemetry records task duration, output size, exit code, and redacted task results; secrets are removed before persistence. Memory retention policies can prune unpinned Markdown memories, while task and execution history remains durable until explicitly removed.
+
+To back up a workspace safely, close Agent Office first, then copy the user-data `data/` directory together with the project's `.agent-office/` directory. Restore both directories while the application is stopped. Do not commit either location when it contains local credentials or operational history.
+
 ## Contributing
 
 Contributions are welcome. To propose a change:
