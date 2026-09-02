@@ -6,6 +6,8 @@ import { execFileSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import pty from 'node-pty'
 import Database from 'better-sqlite3'
+import { assertTaskTransition, isTaskStatus, resolveTaskReadiness } from './task-lifecycle'
+import type { BlockedReason, TaskStatus } from './task-lifecycle'
 
 type AgentStatus = 'idle' | 'working' | 'paused' | 'error' | 'offline'
 
@@ -31,8 +33,6 @@ type Project = {
   useWorktrees: number
 }
 
-type TaskStatus = 'backlog' | 'assigned' | 'running' | 'blocked' | 'review' | 'done' | 'failed'
-
 type Task = {
   id: string
   projectId: string
@@ -48,18 +48,7 @@ type Task = {
   reviewNotes?: string | null
   branch?: string | null
   budgetMinutes?: number | null
-  blockedReason?: string | null
-}
-
-const taskStatuses = ['backlog', 'assigned', 'running', 'blocked', 'review', 'done', 'failed'] as const
-const taskTransitions: Record<TaskStatus, readonly TaskStatus[]> = {
-  backlog: ['assigned', 'blocked', 'review'],
-  assigned: ['backlog', 'blocked', 'running', 'review'],
-  running: ['blocked', 'review', 'failed'],
-  blocked: ['backlog', 'assigned', 'running'],
-  review: ['blocked', 'done', 'running'],
-  done: [],
-  failed: ['backlog', 'assigned', 'running']
+  blockedReason?: BlockedReason
 }
 
 type Schedule = {
@@ -772,20 +761,6 @@ function dependencyIdsReady(dependencyIds: string[]) {
   })
 }
 
-function isTaskStatus(value: unknown): value is TaskStatus {
-  return typeof value === 'string' && (taskStatuses as readonly string[]).includes(value)
-}
-
-function assertTaskTransition(current: TaskStatus, next: TaskStatus) {
-  if (current === next) return
-  if (!taskTransitions[current].includes(next)) throw new Error(`Invalid task transition: ${current} -> ${next}`)
-}
-
-function taskReadyStatus(agentId: string | null | undefined, taskId: string): TaskStatus {
-  if (!dependenciesReady(taskId)) return 'blocked'
-  return agentId ? 'assigned' : 'backlog'
-}
-
 function promoteDependentTasks(projectId: string) {
   const candidates = db.prepare(`
     SELECT id, status, agent_id AS agentId, approval_status AS approvalStatus, blocked_reason AS blockedReason
@@ -793,7 +768,7 @@ function promoteDependentTasks(projectId: string) {
   `).all(projectId) as Array<{ id: string; status: TaskStatus; agentId?: string | null; approvalStatus: string; blockedReason?: string | null }>
   for (const task of candidates) {
     if (task.approvalStatus === 'pending' || !dependenciesReady(task.id)) continue
-    const nextStatus = taskReadyStatus(task.agentId, task.id)
+    const nextStatus = resolveTaskReadiness(task.agentId, true, false).status
     db.prepare('UPDATE tasks SET status=?, blocked_reason=NULL, updated_at=CURRENT_TIMESTAMP WHERE id=?').run(nextStatus, task.id)
     recordEvent(getProject(projectId), task.agentId ?? null, 'task.unblocked', { taskId: task.id, status: nextStatus, reason: 'dependencies-complete' })
   }
@@ -861,10 +836,11 @@ function processSchedules() {
       while (next <= now)
       const taskId = randomUUID()
       const approvalStatus = requiresApproval(schedule.prompt) ? 'pending' : 'not_required'
-      const status: TaskStatus = approvalStatus === 'pending' ? 'blocked' : schedule.agentId ? 'assigned' : 'backlog'
+      const readiness = resolveTaskReadiness(schedule.agentId, true, approvalStatus === 'pending')
+      const status = readiness.status
       db.prepare(`UPDATE schedules SET next_run_at=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`).run(next.toISOString(), schedule.id)
       db.prepare(`INSERT INTO tasks (id, project_id, title, prompt, status, agent_id, approval_status, blocked_reason) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
-        .run(taskId, project.id, `[Schedule] ${schedule.name}`, schedule.prompt, status, schedule.agentId ?? null, approvalStatus, approvalStatus === 'pending' ? 'approval' : null)
+        .run(taskId, project.id, `[Schedule] ${schedule.name}`, schedule.prompt, status, schedule.agentId ?? null, approvalStatus, readiness.blockedReason)
       if (approvalStatus === 'pending') {
         db.prepare(`INSERT INTO approvals (id, project_id, task_id, type, title, reason, payload_json) VALUES (?, ?, ?, ?, ?, ?, ?)`)
           .run(randomUUID(), project.id, taskId, 'safety', `Approve scheduled task: ${schedule.name}`, 'Scheduled prompt contains a potentially destructive, scope-changing, or costly operation.', JSON.stringify({ prompt: schedule.prompt }))
@@ -965,8 +941,9 @@ function registerIpc() {
       if (!dependency || dependency.projectId !== project.id || dependencyId === input.id) throw new Error('Invalid task dependency')
     }
     const dependenciesReadyNow = dependencyIdsReady(dependencies)
-    const status: TaskStatus = approvalStatus === 'pending' || !dependenciesReadyNow ? 'blocked' : agentId ? 'assigned' : 'backlog'
-    const blockedReason = approvalStatus === 'pending' ? 'approval' : dependenciesReadyNow ? null : 'dependencies'
+    const readiness = resolveTaskReadiness(agentId, dependenciesReadyNow, approvalStatus === 'pending')
+    const status = readiness.status
+    const blockedReason = readiness.blockedReason
     const transaction = db.transaction(() => {
       db.prepare(`INSERT INTO tasks (id, project_id, title, prompt, status, agent_id, approval_status, blocked_reason, branch, budget_minutes, source_type, source_ref)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
@@ -1072,10 +1049,11 @@ function registerIpc() {
         const candidate = projectAgents.find(agent => agent.profileId === profileId && agent.status !== 'working')
         const taskId = randomUUID()
         const approvalStatus = requiresApproval(part) ? 'pending' : 'not_required'
-        const status: TaskStatus = approvalStatus === 'pending' ? 'blocked' : candidate ? 'assigned' : 'backlog'
+        const readiness = resolveTaskReadiness(candidate?.id, true, approvalStatus === 'pending')
+        const status = readiness.status
         db.prepare(`INSERT INTO tasks (id, project_id, title, prompt, status, agent_id, mission_id, approval_status, blocked_reason)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-          .run(taskId, project.id, `${index + 1}. ${part.slice(0, 100)}`, part, status, candidate?.id ?? null, missionId, approvalStatus, approvalStatus === 'pending' ? 'approval' : null)
+          .run(taskId, project.id, `${index + 1}. ${part.slice(0, 100)}`, part, status, candidate?.id ?? null, missionId, approvalStatus, readiness.blockedReason)
         createdTaskIds.push(taskId)
         if (approvalStatus === 'pending') {
           db.prepare(`INSERT INTO approvals (id, project_id, task_id, type, title, reason, payload_json) VALUES (?, ?, ?, ?, ?, ?, ?)`)
@@ -1154,7 +1132,7 @@ function registerIpc() {
       if (approval.taskId) {
         const task = db.prepare('SELECT agent_id AS agentId, status FROM tasks WHERE id=?').get(approval.taskId) as { agentId?: string | null; status: TaskStatus } | undefined
         if (task && input.status === 'approved') {
-          const nextStatus = taskReadyStatus(task.agentId, approval.taskId)
+          const nextStatus = resolveTaskReadiness(task.agentId, dependenciesReady(approval.taskId), false).status
           assertTaskTransition(task.status, nextStatus)
           db.prepare("UPDATE tasks SET approval_status='approved', status=?, blocked_reason=?, updated_at=CURRENT_TIMESTAMP WHERE id=?")
             .run(nextStatus, nextStatus === 'blocked' ? 'dependencies' : null, approval.taskId)
