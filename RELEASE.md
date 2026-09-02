@@ -20,7 +20,7 @@
 
 CI menjalankan `smoke:native`, `smoke:main`, `smoke:migration`, dan target packaging native masing-masing pada Ubuntu (AppImage), Windows (NSIS), dan macOS (DMG). Workflow memiliki timeout, permission minimal, dan artifact wajib (`if-no-files-found: error`); workflow bisa dipicu melalui `workflow_dispatch` untuk review release.
 
-Verifikasi lokal terakhir: 2026-09-01, Linux x64. Production dan full dependency audit bersih (`npm audit` dan `npm audit --omit=dev`).
+Verifikasi lokal terakhir: 2026-09-03, Linux x64. `npm run dist:linux` berhasil menghasilkan `dist/Agent Office-1.0.0.AppImage` setelah rebuild `better-sqlite3` dan `node-pty`. Production dan full dependency audit bersih (`npm audit` dan `npm audit --omit=dev`).
 
 ## Catatan environment
 
