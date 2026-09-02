@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit",
     "smoke:unit": "node --experimental-strip-types scripts/unit-smoke.mjs",
     "smoke:web": "node --experimental-strip-types scripts/web-smoke.mjs",
+    "web:server": "node --experimental-strip-types src/web/main.ts",
     "smoke:native": "node scripts/native-smoke.cjs",
     "smoke:main": "node scripts/main-smoke.cjs",
     "smoke:migration": "node scripts/migration-smoke.cjs",

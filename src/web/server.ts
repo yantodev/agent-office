@@ -43,11 +43,18 @@ function frame(payload: unknown) {
 
 export function createWebServer(options: WebServerOptions) {
   const clients = new Set<WebSocketClient>()
+  const rateWindows = new Map<string, { startedAt: number; count: number }>()
   const server = createServer(async (request, response) => {
     try {
       const url = new URL(request.url ?? '/', 'http://localhost')
       if (url.pathname === '/healthz' && request.method === 'GET') return json(response, 200, { ok: true })
       if (!authorized(request, options.token)) return json(response, 401, { error: 'Unauthorized' })
+      const rateKey = request.socket.remoteAddress || 'unknown'
+      const now = Date.now()
+      const rate = rateWindows.get(rateKey)
+      if (!rate || now - rate.startedAt >= 60_000) rateWindows.set(rateKey, { startedAt: now, count: 1 })
+      else if (rate.count >= 120) return json(response, 429, { error: 'Rate limit exceeded' })
+      else rate.count += 1
       const segments = url.pathname.split('/').filter(Boolean)
       if (request.method === 'GET' && segments[0] === 'v1' && segments[1] === 'projects' && segments.length === 2) return json(response, 200, options.storage.listProjects())
       if (request.method === 'GET' && segments[0] === 'v1' && segments[1] === 'projects' && segments[3]) {

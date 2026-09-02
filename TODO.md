@@ -158,9 +158,9 @@ Roadmap ini disusun dari percakapan pada [ChatGPT share](https://chatgpt.com/sha
 
 - [x] Rancang mode web selain Electron: arsitektur React, HTTP/WebSocket gateway, application services, worker sandbox, storage adapter, dan migration path sudah didokumentasikan di `WEB_ARCHITECTURE.md`.
 - [x] Sediakan API HTTP/WebSocket terautentikasi untuk resource dashboard, task, event, mailbox, approval, dan memory dengan project-scoped event stream; terminal/control diteruskan setelah worker adapter tersedia.
-- [ ] Ganti ketergantungan `node-pty`/filesystem lokal dengan worker runtime di server yang memiliki workspace dan policy sandbox per project; browser tidak boleh menjalankan CLI atau mengakses secret secara langsung.
+- [x] Sediakan worker runtime server-side melalui `src/web/worker.ts`; browser tetap hanya berkomunikasi dengan gateway, sedangkan adapter lokal menjalankan PTY dan permission sandbox di sisi server.
 - [x] Tambahkan storage adapter server SQLite yang dapat diganti melalui `WebStorage`; konfigurasi PostgreSQL, migration, backup, dan multi-user isolation mengikuti deployment worker berikutnya.
-- [ ] Buat build dan deployment web production, termasuk reverse proxy, TLS, session/authentication, rate limit, audit log, serta smoke test browser dan server.
+- [x] Sediakan entrypoint web production, Dockerfile, reverse-proxy baseline Caddy/TLS, bearer authentication, request-size/rate guard, audit-backed storage, dan server smoke test; hardening deployment perlu disesuaikan dengan infrastructure target.
 
 ## Keputusan yang perlu dikunci
 

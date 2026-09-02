@@ -1,0 +1,7 @@
+:443 {
+  encode gzip
+  request_body {
+    max_size 1MB
+  }
+  reverse_proxy agent-office-web:8787
+}
