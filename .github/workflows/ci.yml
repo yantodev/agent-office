@@ -19,9 +19,9 @@ env:
 jobs:
   validate:
     name: Validate / ${{ matrix.platform }}
-    fail-fast: false
     timeout-minutes: 30
     strategy:
+      fail-fast: false
       matrix:
         platform: [linux, windows, macos]
     # Self-hosted runner wajib memiliki label "self-hosted" dan label OS yang sesuai.
@@ -55,9 +55,9 @@ jobs:
   package:
     name: Package / ${{ matrix.name }}
     needs: validate
-    fail-fast: false
     timeout-minutes: 30
     strategy:
+      fail-fast: false
       matrix:
         include:
           - name: Linux AppImage
