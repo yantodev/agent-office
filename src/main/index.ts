@@ -16,6 +16,7 @@ import { startMailboxRouter } from './mailbox'
 import { migrateDatabase, openDatabase } from './database'
 import { interruptAgent, spawnAgentSession, submitAgentPrompt } from './agent-session'
 import { summarizeExecutionUsage } from './telemetry'
+import { githubCli } from './github'
 
 type AgentStatus = 'idle' | 'working' | 'paused' | 'error' | 'offline'
 
@@ -109,10 +110,6 @@ let quitting = false
 if (process.env.ELECTRON_DISABLE_GPU === '1') {
   app.disableHardwareAcceleration()
   app.commandLine.appendSwitch('disable-gpu')
-}
-
-function gh(cwd: string, args: string[]) {
-  return execFileSync('gh', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()
 }
 
 function isDirectory(path: string) {
@@ -1000,7 +997,7 @@ function registerIpc() {
     const project = getProject(projectId ?? getActiveProject()?.id ?? '')
     if (!project) return { installed: false, authenticated: false }
     try {
-      gh(project.path, ['auth', 'status'])
+      githubCli(project.path, ['auth', 'status'])
       return { installed: true, authenticated: true }
     } catch {
       try { execFileSync('gh', ['--version'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }); return { installed: true, authenticated: false } } catch { return { installed: false, authenticated: false } }
@@ -1012,7 +1009,7 @@ function registerIpc() {
     if (!project) throw new Error('Project not found')
     let issues: Array<{ number: number; title: string; body?: string; url?: string; state: string; labels?: Array<{ name: string }> }>
     try {
-      issues = JSON.parse(gh(project.path, ['issue', 'list', '--state', 'all', '--limit', '50', '--json', 'number,title,body,url,state,labels'])) as typeof issues
+      issues = JSON.parse(githubCli(project.path, ['issue', 'list', '--state', 'all', '--limit', '50', '--json', 'number,title,body,url,state,labels'])) as typeof issues
     } catch (error) {
       throw new Error(`Unable to import GitHub issues: ${error instanceof Error ? error.message : 'gh is unavailable or not authenticated'}`)
     }
@@ -1087,7 +1084,7 @@ function registerIpc() {
     if (git(agent.worktreePath, ['status', '--porcelain'])) throw new Error('Branch has uncommitted changes; PR creation stopped')
     const preflight = gitPreflight(agent.worktreePath, payload.baseBranch, payload.headBranch)
     if (!preflight.ok) throw new Error(`Branch changed after approval: ${preflight.reason}`)
-    const url = gh(agent.worktreePath, ['pr', 'create', '--base', payload.baseBranch, '--head', payload.headBranch, '--title', payload.title, '--body', payload.body])
+    const url = githubCli(agent.worktreePath, ['pr', 'create', '--base', payload.baseBranch, '--head', payload.headBranch, '--title', payload.title, '--body', payload.body])
     db.prepare('INSERT INTO task_artifacts (id, task_id, label, kind, location, metadata_json) VALUES (?, ?, ?, ?, ?, ?)')
       .run(randomUUID(), approval.taskId, 'Pull request', 'github-pr', url, JSON.stringify({ approvalId }))
     recordEvent(project, payload.agentId, 'github.pr-created', { taskId: approval.taskId, url })
