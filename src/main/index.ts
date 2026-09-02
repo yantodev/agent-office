@@ -14,6 +14,7 @@ import { writeJsonAtomic, writeTextAtomic } from './persistence'
 import { createWorktree, git, gitBranch, gitPreflight, removeWorktree, safePathSegment } from './git'
 import { pruneExpiredMemories, startScheduler } from './scheduler'
 import { startMailboxRouter } from './mailbox'
+import { migrateDatabase, openDatabase } from './database'
 
 type AgentStatus = 'idle' | 'working' | 'paused' | 'error' | 'offline'
 
@@ -296,9 +297,8 @@ function ensureColumn(table: string, column: string, definition: string) {
 }
 
 function initDb() {
-  const dir = join(app.getPath('userData'), 'data')
-  fs.mkdirSync(dir, { recursive: true })
-  db = new Database(join(dir, 'agent-office.db'))
+  db = openDatabase(app.getPath('userData'))
+  migrateDatabase(db)
   db.pragma('foreign_keys = ON')
   db.exec(`
     CREATE TABLE IF NOT EXISTS projects (

@@ -143,7 +143,7 @@ Roadmap ini disusun dari percakapan pada [ChatGPT share](https://chatgpt.com/sha
 
 ### Prioritas P1 — Maintainability dan observability
 
-- [ ] Pecah `src/main/index.ts` menjadi modul schema/migration, persistence, PTY, GitHub, mailbox, scheduler, memory, dan IPC agar perubahan dapat diuji serta direview per boundary. Progress: Git/worktree/preflight, security/path/redaction, atomic persistence, scheduler/memory retention, dan mailbox router/watchdog sudah memiliki module seam tersendiri.
+- [ ] Pecah `src/main/index.ts` menjadi modul schema/migration, persistence, PTY, GitHub, mailbox, scheduler, memory, dan IPC agar perubahan dapat diuji serta direview per boundary. Progress: schema/migration, Git/worktree/preflight, security/path/redaction, atomic persistence, scheduler/memory retention, dan mailbox router/watchdog sudah memiliki module seam tersendiri.
 - [x] Tambahkan event subscription atau polling terkontrol untuk task, mailbox, approval, memory, dan office floor; polling berhenti saat window tersembunyi, mencegah request overlap, dan refresh saat window kembali aktif.
 - [x] Tambahkan unit/integration test terisolasi untuk redaction, lifecycle task, permission, path traversal/symlink, atomic persistence, dan race condition mailbox; pertahankan smoke test sebagai test end-to-end.
 - [x] Tambahkan validasi input dan error UX di renderer. Form utama memakai validasi native dan banner global menangkap kegagalan IPC/runtime dengan opsi dismiss.
