@@ -10,6 +10,9 @@ const projectPath = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-office-project-
 const repoPath = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-office-git-smoke-'))
 const holdCommand = process.platform === 'win32' ? 'Start-Sleep -Seconds 5' : 'sleep 5'
 const secretCommand = process.platform === 'win32' ? "Write-Output 'token=supersecret'" : "printf 'token=supersecret\\n'"
+const hasBubblewrap = process.platform === 'linux' && (() => {
+  try { execFileSync('which', ['bwrap'], { stdio: 'ignore' }); return true } catch { return false }
+})()
 execFileSync('git', ['-C', repoPath, 'init'], { stdio: 'ignore' })
 execFileSync('git', ['-C', repoPath, 'config', 'user.email', 'smoke@example.invalid'], { stdio: 'ignore' })
 execFileSync('git', ['-C', repoPath, 'config', 'user.name', 'Agent Office Smoke'], { stdio: 'ignore' })
@@ -176,6 +179,18 @@ setTimeout(async () => {
   await new Promise(resolve => setTimeout(resolve, 250))
   const persistedSecretTask = (await call('tasks:list', project.id)).find(value => value.id === secretTask.id)
   if (!persistedSecretTask || String(persistedSecretTask.result).includes('supersecret')) throw new Error('task output secret redaction smoke failed')
+
+  await call('profiles:create', { id: 'smoke-restricted-profile', name: 'Restricted', role: 'Sandboxed worker', command: 'printf restricted', soul: '', permissions: { filesystem: false, network: false, shell: true, git: false, secrets: false } })
+  const restrictedAgent = await call('agents:create', { id: 'smoke-restricted-agent', name: 'Restricted Worker', role: 'Sandboxed worker', command: 'printf restricted', cwd: '.', projectId: project.id, profileId: 'smoke-restricted-profile' })
+  let restrictedError = ''
+  try {
+    await handlers.get('agent:start')(trustedEvent, restrictedAgent)
+  } catch (error) {
+    restrictedError = String(error?.message ?? error)
+  }
+  if (hasBubblewrap && restrictedError) throw new Error(`restricted sandbox smoke failed: ${restrictedError}`)
+  if (!hasBubblewrap && !restrictedError) throw new Error('restricted profile must fail closed without bubblewrap')
+  if (!restrictedError) await call('agent:stop', restrictedAgent.id)
 
   await call('memories:save', { id: 'smoke-memory', projectId: project.id, title: 'SQLite decision', category: 'architecture', body: 'Use SQLite for durable local state.' })
   if (!(await call('memories:semantic-search', { projectId: project.id, query: 'durable SQLite state' })).some(value => value.id === 'smoke-memory')) throw new Error('semantic memory smoke failed')

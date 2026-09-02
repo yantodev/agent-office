@@ -137,7 +137,7 @@ Roadmap ini disusun dari percakapan pada [ChatGPT share](https://chatgpt.com/sha
 ### Prioritas P0 — Reliability dan security
 
 - [x] Buat Git compatibility gate dan fallback PR preflight. PR preflight kini memakai bentuk three-tree yang kompatibel dengan Git 2.34.1 dan smoke test mencakup branch bersih serta konflik.
-- [ ] Tegakkan permission profile secara nyata. Saat ini `filesystem`, `network`, dan `git` terutama dikirim sebagai environment flag; tambahkan enforcement melalui sandbox/allowlist dan uji bahwa agent tidak dapat melewati policy.
+- [x] Tegakkan permission profile secara nyata. Linux memakai sandbox `bubblewrap` dengan workspace writable, root filesystem read-only, network isolation, dan deny-wrapper Git; platform tanpa enforcement aman bersifat fail-closed.
 - [x] Hardening seluruh IPC dan konfigurasi: validasi sender, batasi path config/artifact ke workspace atau allowlist eksplisit, cek ulang symlink saat apply, dan jaga konsistensi transaksi antara file system dan SQLite.
 - [x] Formalisasi task state machine dan dispatcher: validasi transisi status, otomatis membuka task setelah dependency selesai, cegah duplicate run, serta pulihkan retry/resume secara durable setelah crash.
 

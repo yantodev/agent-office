@@ -8,6 +8,7 @@ import pty from 'node-pty'
 import Database from 'better-sqlite3'
 import { assertTaskTransition, isTaskStatus, resolveTaskReadiness } from './task-lifecycle'
 import type { BlockedReason, TaskStatus } from './task-lifecycle'
+import { executionPlan } from './permission-policy'
 
 type AgentStatus = 'idle' | 'working' | 'paused' | 'error' | 'offline'
 
@@ -1600,7 +1601,15 @@ function registerIpc() {
     environment.AGENT_OFFICE_SECRETS_ALLOWED = permissions.secrets ? '1' : '0'
     const injectedSoul = permissions.secrets ? profile?.soul ?? '' : redactSecrets(profile?.soul ?? '')
     const injectedPrompt = permissions.secrets ? taskPrompt : redactSecrets(taskPrompt)
-    const term = pty.spawn(shell.shell, shell.args, {
+    const plan = executionPlan({
+      platform: process.platform,
+      permissions,
+      cwd,
+      userDataPath: app.getPath('userData'),
+      shell,
+      environment,
+    })
+    const term = pty.spawn(plan.file, plan.args, {
       name: 'xterm-256color',
       cols: 120,
       rows: 30,
