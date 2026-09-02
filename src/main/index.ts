@@ -8,13 +8,13 @@ import pty from 'node-pty'
 import Database from 'better-sqlite3'
 import { assertTaskTransition, isTaskStatus, resolveTaskReadiness } from './task-lifecycle'
 import type { BlockedReason, TaskStatus } from './task-lifecycle'
-import { executionPlan } from './permission-policy'
 import { canonicalPath, isCanonicalPathInside, redactSecrets } from './security'
 import { writeJsonAtomic, writeTextAtomic } from './persistence'
 import { createWorktree, git, gitBranch, gitPreflight, removeWorktree, safePathSegment } from './git'
 import { pruneExpiredMemories, startScheduler } from './scheduler'
 import { startMailboxRouter } from './mailbox'
 import { migrateDatabase, openDatabase } from './database'
+import { spawnAgentSession } from './agent-session'
 
 type AgentStatus = 'idle' | 'working' | 'paused' | 'error' | 'offline'
 
@@ -1406,26 +1406,16 @@ function registerIpc() {
     environment.AGENT_OFFICE_SECRETS_ALLOWED = permissions.secrets ? '1' : '0'
     const injectedSoul = permissions.secrets ? profile?.soul ?? '' : redactSecrets(profile?.soul ?? '')
     const injectedPrompt = permissions.secrets ? taskPrompt : redactSecrets(taskPrompt)
-    const plan = executionPlan({
-      platform: process.platform,
-      permissions,
+    const term = spawnAgentSession({
+      shell,
       cwd,
       userDataPath: app.getPath('userData'),
-      shell,
+      permissions,
       environment,
-    })
-    const term = pty.spawn(plan.file, plan.args, {
-      name: 'xterm-256color',
-      cols: 120,
-      rows: 30,
-      cwd,
-      env: {
-        ...environment,
-        AGENT_OFFICE_PROFILE: profile?.name ?? '',
-        AGENT_OFFICE_SOUL: injectedSoul,
-        AGENT_OFFICE_TASK_ID: taskId ?? '',
-        AGENT_OFFICE_TASK_PROMPT: injectedPrompt,
-      } as Record<string, string>
+      profileName: profile?.name,
+      soul: injectedSoul,
+      taskId,
+      taskPrompt: injectedPrompt,
     })
     sessions.set(storedAgent.id, term)
     circuitStates.set(storedAgent.id, { steerCount: 0, lastSteerAt: 0, constrained: false })
