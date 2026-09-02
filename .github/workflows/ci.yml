@@ -14,6 +14,7 @@ concurrency:
 
 env:
   NODE_VERSION: 22
+  GH_TOKEN: ${{ github.token }}
 
 jobs:
   validate:
@@ -45,6 +46,7 @@ jobs:
       - run: npm run typecheck
       - run: npm run smoke:unit
       - run: npm run smoke:web
+      - run: npm run smoke:github
       - run: npm run smoke:native
       - run: npm run smoke:main
       - run: npm run smoke:migration
