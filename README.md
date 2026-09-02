@@ -21,6 +21,7 @@ The application is designed to keep project data and coordination state on the l
 - Steer, interrupt, pause, resume, or stop running agents.
 - Recover agent state after process crashes.
 - Enforce profile permissions, execution budgets, and secret redaction.
+- Use provider adapters for Codex, OpenCode, Claude, Gemini, Qwen, and Copilot terminal behavior.
 
 ### Project and task coordination
 

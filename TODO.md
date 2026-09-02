@@ -150,7 +150,7 @@ Roadmap ini disusun dari percakapan pada [ChatGPT share](https://chatgpt.com/sha
 
 ### Prioritas P2 — Provider dan release readiness
 
-- [ ] Implementasikan adapter provider-specific untuk Codex, OpenCode, Claude, Gemini, Qwen, dan Copilot agar SOUL/task prompt, steer, interrupt, dan permission tidak hanya bergantung pada environment variable generik.
+- [x] Implementasikan adapter provider-specific untuk Codex, OpenCode, Claude, Gemini, Qwen, dan Copilot agar identifikasi provider, context SOUL/task prompt, submit prompt, steer, interrupt, dan permission memiliki interface terpisah.
 - [ ] Lengkapi verifikasi native module dan packaging pada runner Windows/macOS, termasuk pause/resume yang saat ini POSIX-only dan smoke test GitHub CLI yang authenticated.
 - [ ] Tambahkan telemetry lokal yang aman untuk durasi task, ukuran output, dan alasan kegagalan tanpa menyimpan secret, serta dokumentasikan retention/backup database dan `.agent-office/`.
 

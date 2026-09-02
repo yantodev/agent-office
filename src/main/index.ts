@@ -14,7 +14,7 @@ import { createWorktree, git, gitBranch, gitPreflight, removeWorktree, safePathS
 import { pruneExpiredMemories, startScheduler } from './scheduler'
 import { startMailboxRouter } from './mailbox'
 import { migrateDatabase, openDatabase } from './database'
-import { spawnAgentSession } from './agent-session'
+import { interruptAgent, spawnAgentSession, submitAgentPrompt } from './agent-session'
 
 type AgentStatus = 'idle' | 'working' | 'paused' | 'error' | 'offline'
 
@@ -1411,6 +1411,7 @@ function registerIpc() {
       cwd,
       userDataPath: app.getPath('userData'),
       permissions,
+      command: storedAgent.command,
       environment,
       profileName: profile?.name,
       soul: injectedSoul,
@@ -1450,7 +1451,7 @@ function registerIpc() {
       }
       event.sender.send('agent:exit', { id: storedAgent.id, exitCode })
     })
-    if (taskId && taskPrompt) setTimeout(() => term.write(`${taskPrompt}\r`), 750)
+    if (taskId && taskPrompt) setTimeout(() => submitAgentPrompt(term, storedAgent.command, taskPrompt), 750)
     return true
   })
 
@@ -1480,7 +1481,7 @@ function registerIpc() {
   ipcMain.handle('agent:control', (event, input: { id: string; action: 'pause' | 'resume' | 'interrupt' | 'steer' | 'constrain'; text?: string }) => {
     const session = sessions.get(input.id)
     if (!session) throw new Error('Agent has no active session')
-    const agentProject = db.prepare('SELECT project_id AS projectId FROM agents WHERE id=?').get(input.id) as { projectId?: string } | undefined
+    const agentProject = db.prepare('SELECT project_id AS projectId, command FROM agents WHERE id=?').get(input.id) as { projectId?: string; command?: string } | undefined
     const project = agentProject?.projectId ? getProject(agentProject.projectId) : undefined
     if (input.action === 'steer') {
       const text = input.text?.trim()
@@ -1499,17 +1500,17 @@ function registerIpc() {
       circuit.steerCount += 1
       circuit.lastSteerAt = now
       circuitStates.set(input.id, circuit)
-      session.write(`${text}\r`)
+      submitAgentPrompt(session, agentProject?.command ?? '', text)
       recordEvent(project, input.id, 'agent.steered', { text })
     } else if (input.action === 'interrupt') {
-      session.write('\u0003')
+      interruptAgent(session, agentProject?.command ?? '')
       recordEvent(project, input.id, 'agent.interrupted')
     } else if (input.action === 'constrain') {
       const circuit = circuitStates.get(input.id) ?? { steerCount: 0, lastSteerAt: 0, constrained: false }
       circuit.constrained = true
       circuitStates.set(input.id, circuit)
       const instruction = input.text?.trim() || 'Stop expanding scope. Work only on the current task, explain uncertainty, and wait for further direction.'
-      session.write(`\r${instruction}\r`)
+      submitAgentPrompt(session, agentProject?.command ?? '', instruction)
       recordEvent(project, input.id, 'agent.constrained', { instruction })
     } else if (process.platform === 'win32') {
       throw new Error('Pause/resume process control is not supported on Windows yet')

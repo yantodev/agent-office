@@ -6,6 +6,7 @@ import test from 'node:test'
 
 const { assertTaskTransition, isTaskStatus, resolveTaskReadiness } = await import('../src/main/task-lifecycle.ts')
 const { executionPlan } = await import('../src/main/permission-policy.ts')
+const { providerAdapter } = await import('../src/main/provider-adapters.ts')
 const { canonicalPath, isCanonicalPathInside, redactSecrets } = await import('../src/main/security.ts')
 const { writeJsonAtomic } = await import('../src/main/persistence.ts')
 
@@ -50,6 +51,18 @@ test('execution plan runs unrestricted profiles directly and fails closed when r
   if (process.platform !== 'linux') {
     assert.throws(() => executionPlan({ platform: process.platform, permissions: { filesystem: false, network: false, git: false }, cwd: process.cwd(), userDataPath: os.tmpdir(), shell, environment }), /sandbox/)
   }
+})
+
+test('provider adapters isolate context and terminal controls per CLI', () => {
+  const adapter = providerAdapter('codex --profile developer')
+  const context = adapter.injectContext({ PATH: '/bin' }, 'soul', 'task')
+  assert.equal(adapter.id, 'codex')
+  assert.equal(context.AGENT_OFFICE_PROVIDER, 'codex')
+  assert.equal(context.AGENT_OFFICE_CODEX_SOUL, 'soul')
+  assert.equal(context.AGENT_OFFICE_CODEX_TASK_PROMPT, 'task')
+  assert.equal(adapter.submitPrompt('hello'), 'hello\r')
+  assert.equal(adapter.interrupt, '\u0003')
+  assert.equal(providerAdapter('github-copilot.exe').id, 'copilot')
 })
 
 test('atomic persistence leaves valid JSON after concurrent writes', async () => {
