@@ -174,3 +174,4 @@ No license file has been published yet. Until a license is added, all rights are
 - [Release checklist](RELEASE.md)
 - [Domain context](CONTEXT.md)
 - [Planned work](TODO.md)
+- [Web architecture](WEB_ARCHITECTURE.md)
