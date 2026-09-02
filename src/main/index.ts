@@ -12,6 +12,7 @@ import { executionPlan } from './permission-policy'
 import { canonicalPath, isCanonicalPathInside, redactSecrets } from './security'
 import { writeJsonAtomic, writeTextAtomic } from './persistence'
 import { createWorktree, git, gitBranch, gitPreflight, removeWorktree, safePathSegment } from './git'
+import { pruneExpiredMemories, startScheduler } from './scheduler'
 
 type AgentStatus = 'idle' | 'working' | 'paused' | 'error' | 'offline'
 
@@ -633,6 +634,17 @@ function requiresApproval(text: string) {
   return /\b(rm|delete|drop|truncate|destroy|push|force[- ]push|deploy|publish|credential|secret|password|sudo|cost|budget)\b/i.test(text)
 }
 
+function schedulerDependencies() {
+  return {
+    db,
+    getProject,
+    getAllProjects: () => db.prepare('SELECT id, name, path, default_branch AS defaultBranch, use_worktrees AS useWorktrees FROM projects').all() as Project[],
+    validateMemoryPath,
+    requiresApproval,
+    recordEvent,
+  }
+}
+
 function taskRow(id: string) {
   const task = db.prepare(`
     SELECT t.id, t.project_id AS projectId, t.title, t.prompt, t.status,
@@ -731,67 +743,6 @@ function decomposeRequest(request: string) {
   if (bullets.length > 0) return bullets.slice(0, 20)
   const sentences = request.split(/(?<=[.!?])\s+/).map(sentence => sentence.trim()).filter(sentence => sentence.length > 12)
   return (sentences.length > 0 ? sentences : [request.trim()]).slice(0, 20)
-}
-
-function processSchedules() {
-  const now = new Date()
-  const due = db.prepare(`
-    SELECT id, project_id AS projectId, name, prompt, agent_id AS agentId,
-      interval_minutes AS intervalMinutes, timezone, next_run_at AS nextRunAt, enabled
-    FROM schedules WHERE enabled=1 AND next_run_at<=? ORDER BY next_run_at
-  `).all(now.toISOString()) as Schedule[]
-  for (const schedule of due) {
-    const project = getProject(schedule.projectId)
-    if (!project) continue
-    const run = db.transaction(() => {
-      let next = new Date(schedule.nextRunAt)
-      do next = new Date(next.getTime() + schedule.intervalMinutes * 60_000)
-      while (next <= now)
-      const taskId = randomUUID()
-      const approvalStatus = requiresApproval(schedule.prompt) ? 'pending' : 'not_required'
-      const readiness = resolveTaskReadiness(schedule.agentId, true, approvalStatus === 'pending')
-      const status = readiness.status
-      db.prepare(`UPDATE schedules SET next_run_at=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`).run(next.toISOString(), schedule.id)
-      db.prepare(`INSERT INTO tasks (id, project_id, title, prompt, status, agent_id, approval_status, blocked_reason) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
-        .run(taskId, project.id, `[Schedule] ${schedule.name}`, schedule.prompt, status, schedule.agentId ?? null, approvalStatus, readiness.blockedReason)
-      if (approvalStatus === 'pending') {
-        db.prepare(`INSERT INTO approvals (id, project_id, task_id, type, title, reason, payload_json) VALUES (?, ?, ?, ?, ?, ?, ?)`)
-          .run(randomUUID(), project.id, taskId, 'safety', `Approve scheduled task: ${schedule.name}`, 'Scheduled prompt contains a potentially destructive, scope-changing, or costly operation.', JSON.stringify({ prompt: schedule.prompt }))
-      }
-      recordEvent(project, schedule.agentId ?? null, 'schedule.triggered', { scheduleId: schedule.id, taskId })
-    })
-    try { run() } catch { /* percobaan berikutnya tetap memakai next_run_at yang durable */ }
-  }
-}
-
-function pruneExpiredMemories(projectId?: string) {
-  const projects = projectId ? [getProject(projectId)].filter(Boolean) as Project[] : db.prepare('SELECT id, name, path, default_branch AS defaultBranch, use_worktrees AS useWorktrees FROM projects').all() as Project[]
-  let removed = 0
-  for (const project of projects) {
-    const expired = db.prepare(`SELECT id, file_path AS filePath FROM memories
-      WHERE project_id=? AND pinned=0 AND retention_days IS NOT NULL
-      AND datetime(updated_at, '+' || retention_days || ' days') < CURRENT_TIMESTAMP`).all(project.id) as Array<{ id: string; filePath: string }>
-    for (const memory of expired) {
-      try {
-        validateMemoryPath(project, memory.filePath)
-        fs.rmSync(memory.filePath, { force: true })
-        fs.rmSync(`${memory.filePath}.metadata`, { force: true })
-      } catch (error) {
-        recordEvent(project, null, 'memory.expiry-blocked', { memoryId: memory.id, reason: error instanceof Error ? error.message : 'invalid memory path' })
-        continue
-      }
-      db.prepare('DELETE FROM memories WHERE id=?').run(memory.id)
-      recordEvent(project, null, 'memory.expired', { memoryId: memory.id })
-      removed += 1
-    }
-  }
-  return removed
-}
-
-function startScheduler() {
-  processSchedules()
-  pruneExpiredMemories()
-  return setInterval(() => { processSchedules(); pruneExpiredMemories() }, 30_000)
 }
 
 function registerIpc() {
@@ -1352,7 +1303,7 @@ function registerIpc() {
   })
 
   ipcMain.handle('memories:prune', (_event, projectId?: string) => {
-    return pruneExpiredMemories(projectId ?? getActiveProject()?.id)
+    return pruneExpiredMemories(schedulerDependencies(), projectId ?? getActiveProject()?.id)
   })
 
   ipcMain.handle('profiles:list', () => {
@@ -1694,7 +1645,7 @@ app.whenReady().then(() => {
   initDb()
   registerIpc()
   mailboxRouter = startMailboxRouter()
-  scheduler = startScheduler()
+  scheduler = startScheduler(schedulerDependencies())
   createWindow()
   app.on('activate', () => BrowserWindow.getAllWindows().length === 0 && createWindow())
 })
