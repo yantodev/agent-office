@@ -25,7 +25,7 @@ function ensureGitDenyWrapper(userDataPath: string) {
   if (!fs.existsSync(wrapperPath)) {
     fs.writeFileSync(wrapperPath, '#!/bin/sh\nprintf "%s\\n" "Git is disabled by the Agent Office permission profile." >&2\nexit 126\n', { mode: 0o700 })
   }
-  return binPath
+  return { binPath, wrapperPath }
 }
 
 export function executionPlan(input: {
@@ -43,8 +43,8 @@ export function executionPlan(input: {
   const bubblewrap = findBubblewrap()
   if (!bubblewrap) throw new Error('Restricted agent profiles require bubblewrap (bwrap) on Linux')
 
-  const binPath = input.permissions.git ? '' : ensureGitDenyWrapper(input.userDataPath)
-  const path = binPath ? `${binPath}:${input.environment.PATH || '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'}` : input.environment.PATH
+  const denyGit = input.permissions.git ? undefined : ensureGitDenyWrapper(input.userDataPath)
+  const path = denyGit ? `${denyGit.binPath}:${input.environment.PATH || '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'}` : input.environment.PATH
   const args = [
     '--die-with-parent',
     '--new-session',
@@ -55,7 +55,12 @@ export function executionPlan(input: {
     '--bind', input.cwd, input.cwd,
     '--setenv', 'AGENT_OFFICE_SANDBOXED', '1',
   ]
-  if (binPath) args.push('--ro-bind', binPath, binPath, '--setenv', 'PATH', path)
+  if (denyGit) {
+    args.push('--ro-bind', denyGit.binPath, denyGit.binPath, '--setenv', 'PATH', path)
+    for (const gitPath of ['/usr/bin/git', '/bin/git', '/usr/local/bin/git']) {
+      if (fs.existsSync(gitPath)) args.push('--ro-bind', denyGit.wrapperPath, gitPath)
+    }
+  }
   if (!input.permissions.network) args.push('--unshare-net')
   args.push('--', input.shell.shell, ...input.shell.args)
   return { file: bubblewrap, args, environment: input.environment, sandboxed: true }
