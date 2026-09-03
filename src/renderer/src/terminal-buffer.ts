@@ -34,6 +34,12 @@ export function hasTerminalBuffer(id: string) {
   return buffers.has(id)
 }
 
+export function hydrateTerminalBuffer(id: string, data: string) {
+  if (!data || buffers.has(id)) return false
+  buffers.set(id, data.slice(-MAX_TERMINAL_BUFFER))
+  return true
+}
+
 export function subscribeTerminalBuffer(listener: (update: TerminalBufferUpdate) => void) {
   listeners.add(listener)
   return () => listeners.delete(listener)

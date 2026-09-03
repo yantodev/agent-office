@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
-import { getTerminalBuffer, hasTerminalBuffer, subscribeTerminalBuffer } from '../terminal-buffer'
+import { getTerminalBuffer, hasTerminalBuffer, hydrateTerminalBuffer, subscribeTerminalBuffer } from '../terminal-buffer'
 
 export function TerminalPanel({ agent }: { agent: Agent | null }) {
   const host = useRef<HTMLDivElement>(null)
@@ -41,9 +41,22 @@ export function TerminalPanel({ agent }: { agent: Agent | null }) {
     if (terminal.current) {
       terminal.current.clear()
       if (!agent) terminal.current.writeln('\x1b[90mSelect an agent to attach.\x1b[0m')
-      else if (hasTerminalBuffer(agent.id)) terminal.current.write(getTerminalBuffer(agent.id))
-      else terminal.current.writeln(`\x1b[32mSelected ${agent.name}. Click Start session.\x1b[0m`)
+      else {
+        const selectedAgent = agent
+        if (hasTerminalBuffer(selectedAgent.id)) terminal.current.write(getTerminalBuffer(selectedAgent.id))
+        else terminal.current.writeln(`\x1b[32mSelected ${selectedAgent.name}. Click Start session.\x1b[0m`)
+      }
       setTimeout(() => fit.current?.fit(), 50)
+      if (agent) {
+        const selectedAgent = agent
+        void window.office.getTerminalBuffer(selectedAgent.id).then(data => {
+          if (!data || activeId.current !== selectedAgent.id || !terminal.current || hasTerminalBuffer(selectedAgent.id)) return
+          if (hydrateTerminalBuffer(selectedAgent.id, data)) {
+            terminal.current.clear()
+            terminal.current.write(data)
+          }
+        }).catch(() => undefined)
+      }
     }
   }, [agent?.id])
 

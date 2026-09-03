@@ -5,6 +5,7 @@ import { dirname, join, normalize, resolve } from 'node:path'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import type { WebStorage } from './storage.ts'
 import type { WorkerRuntime, WorkerSession } from './worker.ts'
+import { appendTerminalOutput, clearAllTerminalOutputs, clearTerminalOutput, readTerminalOutput } from '../main/terminal-buffer-store.ts'
 
 type WebServerOptions = {
   storage: WebStorage
@@ -135,6 +136,8 @@ export function createWebServer(options: WebServerOptions) {
   const rateWindows = new Map<string, { startedAt: number; count: number }>()
   const rateLimitMaxRequests = options.rateLimit?.maxRequests ?? 300
   const rateLimitWindowMs = options.rateLimit?.windowMs ?? 60_000
+  const terminalOutputRoot = options.userDataPath ?? '.agent-office-web'
+  clearAllTerminalOutputs(terminalOutputRoot)
 
   const broadcast = (event: { projectId?: string; type: string; [key: string]: unknown }) => {
     const payload = frame(event)
@@ -160,9 +163,13 @@ export function createWebServer(options: WebServerOptions) {
     sessions.set(agentId, session)
     options.storage.setAgentStatus(agentId, 'working')
     if (agent.projectId) broadcast({ projectId: agent.projectId, type: 'agent.state', agentId, status: 'working' })
-    session.onData(data => broadcast({ projectId: agent.projectId ?? undefined, type: 'terminal.data', agentId, data }))
+    session.onData(data => {
+      appendTerminalOutput(terminalOutputRoot, agentId, data)
+      broadcast({ projectId: agent.projectId ?? undefined, type: 'terminal.data', agentId, data })
+    })
     session.onExit(exitCode => {
       sessions.delete(agentId)
+      clearTerminalOutput(terminalOutputRoot, agentId)
       options.storage.setAgentStatus(agentId, exitCode === 0 ? 'idle' : 'error')
       if (agent.projectId) broadcast({ projectId: agent.projectId, type: 'agent.exit', agentId, exitCode })
     })
@@ -263,6 +270,14 @@ export function createWebServer(options: WebServerOptions) {
       }
       if (segments[0] === 'v1' && segments[1] === 'agents' && segments[2]) {
         const id = segments[2]
+        if (request.method === 'GET' && segments[3] === 'terminal-buffer') {
+          const activeSession = options.worker?.get(id) ?? sessions.get(id)
+          if (!activeSession) {
+            clearTerminalOutput(terminalOutputRoot, id)
+            return json(response, 200, { data: '' })
+          }
+          return json(response, 200, { data: readTerminalOutput(terminalOutputRoot, id) })
+        }
         if (request.method === 'POST' && segments[3] === 'start') return json(response, 200, { ok: startWorker(id, String((await body(request, options.maxBodyBytes ?? 1_000_000)).taskId ?? '')) })
         if (request.method === 'POST' && segments[3] === 'stop') return json(response, 200, { ok: options.worker?.stop(id) ?? false })
         if (request.method === 'POST' && segments[3] === 'control') {

@@ -72,6 +72,7 @@ declare global {
       commit(input: { agentId:string; message:string }): Promise<{ output:string; branch:string }>
       writeTerminal(id:string,data:string): void
       resizeTerminal(id:string,cols:number,rows:number): void
+      getTerminalBuffer(id:string): Promise<string>
       detectCli(): Promise<CliInfo[]>
       onTerminalData(cb:(payload:{id:string;data:string})=>void):()=>void
       onAgentExit(cb:(payload:{id:string;exitCode:number})=>void):()=>void

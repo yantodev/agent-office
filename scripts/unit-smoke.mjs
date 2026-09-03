@@ -10,6 +10,7 @@ const { providerAdapter } = await import('../src/main/provider-adapters.ts')
 const { canonicalPath, isCanonicalPathInside, redactSecrets } = await import('../src/main/security.ts')
 const { writeJsonAtomic } = await import('../src/main/persistence.ts')
 const { summarizeExecutionUsage } = await import('../src/main/telemetry.ts')
+const { appendTerminalOutput, clearTerminalOutput, clearAllTerminalOutputs, readTerminalOutput } = await import('../src/main/terminal-buffer-store.ts')
 const { appendTerminalBuffer, clearTerminalBuffer, getTerminalBuffer, hasTerminalBuffer, subscribeTerminalBuffer } = await import('../src/renderer/src/terminal-buffer.ts')
 
 test('task lifecycle rejects invalid transitions and resolves readiness', () => {
@@ -92,4 +93,16 @@ test('terminal buffer survives panel unmount and clears when the session exits',
   clearTerminalBuffer(id)
   assert.equal(hasTerminalBuffer(id), false)
   assert.equal(getTerminalBuffer(id), '')
+})
+
+test('terminal output is persisted per agent and removed when all sessions are recovered', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-office-terminal-output-'))
+  appendTerminalOutput(root, 'disk-agent', 'persisted output')
+  assert.equal(readTerminalOutput(root, 'disk-agent'), 'persisted output')
+  clearTerminalOutput(root, 'disk-agent')
+  assert.equal(readTerminalOutput(root, 'disk-agent'), '')
+  appendTerminalOutput(root, 'disk-agent', 'stale output')
+  clearAllTerminalOutputs(root)
+  assert.equal(readTerminalOutput(root, 'disk-agent'), '')
+  fs.rmSync(root, { recursive: true, force: true })
 })

@@ -17,6 +17,7 @@ import { migrateDatabase, openDatabase } from './database'
 import { interruptAgent, spawnAgentSession, submitAgentPrompt } from './agent-session'
 import { summarizeExecutionUsage } from './telemetry'
 import { githubCli } from './github'
+import { appendTerminalOutput, clearAllTerminalOutputs, clearTerminalOutput, readTerminalOutput } from './terminal-buffer-store'
 
 type AgentStatus = 'idle' | 'working' | 'paused' | 'error' | 'offline'
 
@@ -329,6 +330,7 @@ function initDb() {
   const insertVector = db.prepare('INSERT OR IGNORE INTO memory_vectors (memory_id, vector_json) VALUES (?, ?)')
   for (const memory of memoryRows) insertVector.run(memory.id, JSON.stringify(memoryVector(`${memory.title} ${memory.category} ${memory.body}`)))
   recoverInterruptedSessions()
+  clearAllTerminalOutputs(app.getPath('userData'))
 }
 
 function createWindow() {
@@ -1243,11 +1245,13 @@ function registerIpc() {
     if (taskId) taskOutputs.set(taskId, '')
     db.prepare("UPDATE agents SET status='working' WHERE id=?").run(storedAgent.id)
     term.onData(data => {
+      appendTerminalOutput(app.getPath('userData'), storedAgent.id, data)
       if (taskId) taskOutputs.set(taskId, `${taskOutputs.get(taskId) ?? ''}${data}`.slice(-100_000))
       event.sender.send('terminal:data', { id: storedAgent.id, data })
     })
     term.onExit(({ exitCode }) => {
       sessions.delete(storedAgent.id)
+      clearTerminalOutput(app.getPath('userData'), storedAgent.id)
       circuitStates.delete(storedAgent.id)
       if (quitting) return
       db.prepare("UPDATE agents SET status=? WHERE id=?").run(exitCode === 0 ? 'idle' : 'error', storedAgent.id)
@@ -1288,6 +1292,13 @@ function registerIpc() {
     const { id, cols, rows } = payload as { id?: unknown; cols?: unknown; rows?: unknown }
     if (typeof id !== 'string' || !Number.isInteger(cols) || !Number.isInteger(rows) || Number(cols) < 1 || Number(cols) > 500 || Number(rows) < 1 || Number(rows) > 500) return
     sessions.get(id)?.resize(Number(cols), Number(rows))
+  })
+  ipcMain.handle('agent:terminal-buffer', (_event, id: string) => {
+    if (!sessions.has(id)) {
+      clearTerminalOutput(app.getPath('userData'), id)
+      return ''
+    }
+    return readTerminalOutput(app.getPath('userData'), id)
   })
   ipcMain.handle('agent:stop', (_event, id: string) => {
     const session = sessions.get(id)

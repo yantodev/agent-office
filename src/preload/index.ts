@@ -53,6 +53,7 @@ contextBridge.exposeInMainWorld('office', {
   commit: (input: unknown) => ipcRenderer.invoke('git:commit', input),
   writeTerminal: (id: string, data: string) => ipcRenderer.send('terminal:write', { id, data }),
   resizeTerminal: (id: string, cols: number, rows: number) => ipcRenderer.send('terminal:resize', { id, cols, rows }),
+  getTerminalBuffer: (id: string) => ipcRenderer.invoke('agent:terminal-buffer', id),
   detectCli: () => ipcRenderer.invoke('system:detectCli'),
   onTerminalData: (cb: (payload: { id: string; data: string }) => void) => {
     const fn = (_: unknown, payload: { id: string; data: string }) => cb(payload)

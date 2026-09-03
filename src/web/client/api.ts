@@ -124,6 +124,7 @@ export function createWebOfficeApi(baseUrl: string, token: string): OfficeApi {
     listAgents: () => request<Agent[]>('/v1/agents'),
     createAgent: (agent: Parameters<OfficeApi['createAgent']>[0]) => agent.projectId ? request<Agent>(`/v1/projects/${encodeURIComponent(agent.projectId)}/agents`, json('POST', agent)) : request<Agent>('/v1/agents', json('POST', agent)),
     removeAgent: (id: string) => request<{ ok: boolean }>(`/v1/agents/${encodeURIComponent(id)}`, { method: 'DELETE' }).then(result => result.ok),
+    getTerminalBuffer: (id: string) => request<{ data: string }>(`/v1/agents/${encodeURIComponent(id)}/terminal-buffer`).then(result => result.data),
     startAgent: (agent: Agent & { taskId?: string; taskPrompt?: string }) => request<{ ok: boolean }>(`/v1/agents/${encodeURIComponent(agent.id)}/start`, json('POST', { taskId: agent.taskId })).then(result => result.ok),
     stopAgent: (id: string) => request<{ ok: boolean }>(`/v1/agents/${encodeURIComponent(id)}/stop`, json('POST', {})).then(result => result.ok),
     controlAgent: (input: Parameters<OfficeApi['controlAgent']>[0]) => request<{ ok: boolean }>(`/v1/agents/${encodeURIComponent(input.id)}/control`, json('POST', input)).then(result => result.ok),
