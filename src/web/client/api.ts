@@ -64,6 +64,7 @@ export function createWebOfficeApi(baseUrl: string, token: string): OfficeApi {
 
   const api = {
     listProjects: () => request<Project[]>('/v1/projects'),
+    listDirectories: (path?: string) => request<DirectoryListing>(`/v1/directories${path ? `?path=${encodeURIComponent(path)}` : ''}`),
     activeProject: async () => {
       const project = await request<Project | null>('/v1/active-project')
       subscribedProjectId = project?.id

@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 
 contextBridge.exposeInMainWorld('office', {
   listProjects: () => ipcRenderer.invoke('projects:list'),
+  listDirectories: (path?: string) => ipcRenderer.invoke('directories:list', path),
   activeProject: () => ipcRenderer.invoke('projects:active'),
   createProject: (project: unknown) => ipcRenderer.invoke('projects:create', project),
   setActiveProject: (id: string) => ipcRenderer.invoke('projects:set-active', id),

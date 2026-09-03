@@ -1,7 +1,7 @@
 import { createHash, timingSafeEqual } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
-import { existsSync, readFileSync, statSync } from 'node:fs'
-import { join, normalize, resolve } from 'node:path'
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
+import { dirname, join, normalize, resolve } from 'node:path'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import type { WebStorage } from './storage.ts'
 import type { WorkerRuntime, WorkerSession } from './worker.ts'
@@ -117,6 +117,17 @@ function staticFile(response: ServerResponse, request: IncomingMessage, staticDi
   return true
 }
 
+function listDirectories(requestedPath?: string) {
+  const path = resolve(requestedPath || process.cwd())
+  if (!existsSync(path) || !statSync(path).isDirectory()) throw new Error(`Directory does not exist: ${path}`)
+  const directories = readdirSync(path, { withFileTypes: true })
+    .filter(entry => entry.isDirectory())
+    .sort((left, right) => left.name.localeCompare(right.name))
+    .map(entry => ({ name: entry.name, path: join(path, entry.name) }))
+  const parentPath = dirname(path) === path ? null : dirname(path)
+  return { path, parentPath, directories }
+}
+
 export function createWebServer(options: WebServerOptions) {
   const clients = new Set<WebSocketClient>()
   const sessions = new Map<string, WorkerSession>()
@@ -164,6 +175,10 @@ export function createWebServer(options: WebServerOptions) {
       if (!rate || now - rate.startedAt >= 60_000) rateWindows.set(rateKey, { startedAt: now, count: 1 })
       else if (rate.count >= 120) return json(response, 429, { error: 'Rate limit exceeded' })
       else rate.count += 1
+
+      if (url.pathname === '/v1/directories' && request.method === 'GET') {
+        return json(response, 200, listDirectories(url.searchParams.get('path') ?? undefined))
+      }
 
       const segments = url.pathname.split('/').filter(Boolean)
       if (url.pathname === '/v1/active-project' && request.method === 'GET') return json(response, 200, options.storage.activeProject())

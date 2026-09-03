@@ -2,6 +2,7 @@
 
 declare global {
   type Project = { id:string; name:string; path:string; defaultBranch:string; useWorktrees:number }
+  type DirectoryListing = { path:string; parentPath:string|null; directories:Array<{ name:string; path:string }> }
   type TaskStatus = 'backlog'|'assigned'|'running'|'blocked'|'review'|'done'|'failed'
   type TaskArtifact = { id:string; label:string; kind:string; location:string; metadata:Record<string, unknown>; createdAt:string }
   type TaskDependency = { id:string; title:string; status:TaskStatus }
@@ -20,6 +21,7 @@ declare global {
   interface Window {
     office: {
       listProjects(): Promise<Project[]>
+      listDirectories(path?:string): Promise<DirectoryListing>
       activeProject(): Promise<Project|null>
       createProject(project: { id:string; name:string; path:string; useWorktrees:boolean }): Promise<Project>
       setActiveProject(id:string): Promise<Project>

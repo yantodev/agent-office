@@ -493,6 +493,17 @@ function registerIpc() {
     return db.prepare('SELECT id, name, path, default_branch AS defaultBranch, use_worktrees AS useWorktrees FROM projects ORDER BY name').all()
   })
 
+  ipcMain.handle('directories:list', (_event, requestedPath?: string) => {
+    const path = resolve(requestedPath || os.homedir())
+    if (!isDirectory(path)) throw new Error(`Directory does not exist: ${path}`)
+    const directories = fs.readdirSync(path, { withFileTypes: true })
+      .filter(entry => entry.isDirectory())
+      .sort((left, right) => left.name.localeCompare(right.name))
+      .map(entry => ({ name: entry.name, path: join(path, entry.name) }))
+    const parentPath = dirname(path) === path ? null : dirname(path)
+    return { path, parentPath, directories }
+  })
+
   ipcMain.handle('projects:active', () => getActiveProject() ?? null)
 
   ipcMain.handle('projects:create', (_event, input: { id: string; name: string; path: string; useWorktrees: boolean }) => {

@@ -358,9 +358,27 @@ function AgentsCenter({ agents, profiles, active, profileDraft, editingProfileId
 }
 
 function WorkspacesCenter({ projects, activeProject, projectDraft, onDraftChange, onCreate, onSelect }: { projects: Project[]; activeProject: Project | null; projectDraft: { name: string; path: string; useWorktrees: boolean }; onDraftChange: (draft: { name: string; path: string; useWorktrees: boolean }) => void; onCreate: (event: React.FormEvent<HTMLFormElement>) => void; onSelect: (id: string) => void }) {
+  const [picker, setPicker] = useState<DirectoryListing | null>(null)
+  const [pickerError, setPickerError] = useState('')
+
+  async function browse(path?: string) {
+    try {
+      setPickerError('')
+      setPicker(await window.office.listDirectories(path))
+    } catch (error) {
+      setPickerError(errorMessage(error))
+    }
+  }
+
+  function chooseCurrentDirectory() {
+    if (!picker) return
+    onDraftChange({ ...projectDraft, path: picker.path })
+    setPicker(null)
+  }
+
   return <section className="workspaces-center">
     <div className="command-header"><div><h2>Workspaces</h2><p>Project root, Git worktree, dan konteks agent.</p></div><span className="task-count">{projects.length} projects</span></div>
-    <div className="workspace-manager-grid"><form className="panel-card project-form" onSubmit={onCreate}><h3>Add workspace</h3><input aria-label="Workspace name" placeholder="Project name (optional)" value={projectDraft.name} onChange={event => onDraftChange({ ...projectDraft, name: event.target.value })} /><input aria-label="Workspace path" placeholder="Absolute folder path" value={projectDraft.path} onChange={event => onDraftChange({ ...projectDraft, path: event.target.value })} /><label className="checkbox-row"><input type="checkbox" checked={projectDraft.useWorktrees} onChange={event => onDraftChange({ ...projectDraft, useWorktrees: event.target.checked })} /> One Git worktree per agent</label><button className="save-profile" type="submit">Add workspace</button></form><div className="panel-card workspace-list-panel"><h3>Available workspaces</h3><div className="workspace-list">{projects.length === 0 ? <p className="muted">No workspace configured.</p> : projects.map(project => <button className={`workspace-row ${activeProject?.id === project.id ? 'active' : ''}`} key={project.id} onClick={() => onSelect(project.id)}><span><strong>{project.name}</strong><small>{project.path}</small></span><em>{activeProject?.id === project.id ? 'Active' : project.useWorktrees ? 'Worktrees' : 'Shared folder'}</em></button>)}</div></div></div>
+    <div className="workspace-manager-grid"><form className="panel-card project-form" onSubmit={onCreate}><h3>Add workspace</h3><input aria-label="Workspace name" placeholder="Project name (optional)" value={projectDraft.name} onChange={event => onDraftChange({ ...projectDraft, name: event.target.value })} /><div className="directory-field"><button className="save-profile" type="button" onClick={() => void browse()}>Choose folder</button>{projectDraft.path ? <code title={projectDraft.path}>{projectDraft.path}</code> : <span className="muted">No folder selected</span>}</div>{pickerError && <small className="picker-error" role="alert">{pickerError}</small>}{picker && <div className="directory-picker" role="dialog" aria-label="Choose workspace folder"><div className="directory-picker-head"><strong>{picker.path}</strong><button type="button" onClick={() => void browse(picker.parentPath ?? undefined)} disabled={!picker.parentPath}>Up</button></div><div className="directory-list">{picker.directories.length ? picker.directories.map(directory => <button type="button" key={directory.path} onClick={() => void browse(directory.path)}>{directory.name}</button>) : <span className="muted">No subdirectories</span>}</div><div className="directory-picker-actions"><button className="save-profile" type="button" onClick={chooseCurrentDirectory}>Use this folder</button><button type="button" className="link-button" onClick={() => setPicker(null)}>Cancel</button></div></div>}<label className="checkbox-row"><input type="checkbox" checked={projectDraft.useWorktrees} onChange={event => onDraftChange({ ...projectDraft, useWorktrees: event.target.checked })} /> One Git worktree per agent</label><button className="save-profile" type="submit" disabled={!projectDraft.path}>Add workspace</button></form><div className="panel-card workspace-list-panel"><h3>Available workspaces</h3><div className="workspace-list">{projects.length === 0 ? <p className="muted">No workspace configured.</p> : projects.map(project => <button className={`workspace-row ${activeProject?.id === project.id ? 'active' : ''}`} key={project.id} onClick={() => onSelect(project.id)}><span><strong>{project.name}</strong><small>{project.path}</small></span><em>{activeProject?.id === project.id ? 'Active' : project.useWorktrees ? 'Worktrees' : 'Shared folder'}</em></button>)}</div></div></div>
   </section>
 }
 
