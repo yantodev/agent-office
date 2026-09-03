@@ -391,7 +391,7 @@ function GithubCenter({ project }: { project: Project | null }) {
   return <section className="github-center"><div className="command-header"><div><h2>GitHub</h2><p>Hubungkan issue repository ke task lokal dengan approval gate.</p></div><span className={`github-status ${status.authenticated ? 'ready' : ''}`}>{status.authenticated ? 'Authenticated' : status.installed ? 'Login required' : 'gh missing'}</span></div><div className="github-overview-grid"><div className="panel-card"><h3>Connection</h3><div className="integration-state"><span className={status.installed ? 'state-ok' : 'state-muted'}>{status.installed ? '●' : '○'} GitHub CLI installed</span><span className={status.authenticated ? 'state-ok' : 'state-muted'}>{status.authenticated ? '●' : '○'} Account authenticated</span></div><button className="save-profile" type="button" onClick={syncIssues} disabled={!project || !status.authenticated}>Sync open issues</button>{message && <small className="muted">{message}</small>}</div><div className="panel-card"><h3>Safety rules</h3><p className="muted">Issue import membuat task durable. Push dan pembuatan pull request tetap membutuhkan approval manusia.</p><div className="github-flow"><span>Issue</span><b>→</b><span>Task</span><b>→</b><span>Agent</span><b>→</b><span>Review</span></div></div></div></section>
 }
 
-function App() {
+export function App() {
   const [agents, setAgents] = useState<Agent[]>([])
   const [profiles, setProfiles] = useState<AgentProfile[]>([])
   const [projects, setProjects] = useState<Project[]>([])
@@ -607,4 +607,6 @@ function App() {
   </div>
 }
 
-createRoot(document.getElementById('root')!).render(<App />)
+// Electron sudah memasang window.office melalui preload sebelum renderer dimuat.
+// Browser entrypoint mengatur adapter HTTP terlebih dahulu lalu merender App sendiri.
+if (typeof window !== 'undefined' && window.office) createRoot(document.getElementById('root')!).render(<App />)
