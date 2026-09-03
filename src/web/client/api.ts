@@ -104,6 +104,7 @@ export function createWebOfficeApi(baseUrl: string, token: string): OfficeApi {
     applyConfigChange: () => Promise.reject(new Error('CLI config changes are only available in the local Electron app')),
     fleetSummary: (projectId?: string) => request<FleetSummary | null>(`/v1/fleet${projectId ? `?projectId=${encodeURIComponent(projectId)}` : ''}`),
     githubStatus: () => request<{ installed: boolean; authenticated: boolean }>('/v1/github/status'),
+    nineRouterHealth: () => request<NineRouterHealth>('/v1/integrations/9router/health'),
     importGithubIssues: () => request<Array<{ issueNumber: number; taskId: string; created: boolean }>>('/v1/github/import-issues', json('POST', {})),
     prepareGithubPr: () => Promise.reject(new Error('GitHub PR preparation requires the Electron local Git adapter')),
     createGithubPr: () => Promise.reject(new Error('GitHub PR creation requires the Electron local Git adapter')),

@@ -25,6 +25,7 @@ contextBridge.exposeInMainWorld('office', {
   applyConfigChange: (approvalId: string) => ipcRenderer.invoke('config:apply', approvalId),
   fleetSummary: (projectId?: string) => ipcRenderer.invoke('fleet:summary', projectId),
   githubStatus: (projectId?: string) => ipcRenderer.invoke('github:status', projectId),
+  nineRouterHealth: () => ipcRenderer.invoke('nine-router:health'),
   importGithubIssues: (projectId?: string) => ipcRenderer.invoke('github:import-issues', projectId),
   prepareGithubPr: (input: unknown) => ipcRenderer.invoke('github:prepare-pr', input),
   createGithubPr: (approvalId: string) => ipcRenderer.invoke('github:create-pr', approvalId),

@@ -18,6 +18,7 @@ import { interruptAgent, spawnAgentSession, submitAgentPrompt } from './agent-se
 import { summarizeExecutionUsage } from './telemetry'
 import { githubCli } from './github'
 import { appendTerminalOutput, clearAllTerminalOutputs, clearTerminalOutput, readTerminalOutput } from './terminal-buffer-store'
+import { checkNineRouter } from './nine-router'
 
 type AgentStatus = 'idle' | 'working' | 'paused' | 'error' | 'offline'
 
@@ -826,6 +827,8 @@ function registerIpc() {
       try { execFileSync('gh', ['--version'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }); return { installed: true, authenticated: false } } catch { return { installed: false, authenticated: false } }
     }
   })
+
+  ipcMain.handle('nine-router:health', () => checkNineRouter(process.env))
 
   ipcMain.handle('github:import-issues', (_event, projectId?: string) => {
     const project = getProject(projectId ?? getActiveProject()?.id ?? '')

@@ -34,7 +34,7 @@ const recoveryStorage = createSqliteStorage(recoveryDatabase)
 assert.equal(recoveryStorage.recoverInterruptedAgents(), 1)
 assert.equal(recoveryStorage.listAgents()[0].status, 'offline')
 recoveryDatabase.close()
-const app = createWebServer({ storage, token: 'smoke-token', staticDir })
+const app = createWebServer({ storage, token: 'smoke-token', staticDir, nineRouterEnvironment: { AGENT_OFFICE_9ROUTER_ENABLED: '0' } })
 const limitedApp = createWebServer({ storage, token: 'smoke-token', rateLimit: { maxRequests: 1, windowMs: 60_000 } })
 let staleStatus
 const controlStorage = {
@@ -100,6 +100,9 @@ try {
   assert.equal((await fetch(`${base}/`)).status, 200)
   assert.match(await (await fetch(`${base}/`)).text(), /Agent Office/)
   assert.equal((await fetch(`${base}/healthz`)).status, 200)
+  const routerHealth = await fetch(`${base}/v1/integrations/9router/health`, { headers: { authorization: 'Bearer smoke-token' } })
+  assert.equal(routerHealth.status, 200)
+  assert.equal((await routerHealth.json()).status, 'disabled')
   const directories = await fetch(`${base}/v1/directories?path=${encodeURIComponent(staticDir)}`, { headers: { authorization: 'Bearer smoke-token' } })
   assert.equal(directories.status, 200)
   assert.equal((await directories.json()).path, staticDir)

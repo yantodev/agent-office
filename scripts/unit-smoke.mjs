@@ -7,7 +7,7 @@ import test from 'node:test'
 const { assertTaskTransition, isTaskStatus, resolveTaskReadiness } = await import('../src/main/task-lifecycle.ts')
 const { executionPlan } = await import('../src/main/permission-policy.ts')
 const { providerAdapter } = await import('../src/main/provider-adapters.ts')
-const { readNineRouterConfig, injectNineRouterEnvironment } = await import('../src/main/nine-router.ts')
+const { readNineRouterConfig, injectNineRouterEnvironment, checkNineRouter } = await import('../src/main/nine-router.ts')
 const { canonicalPath, isCanonicalPathInside, redactSecrets } = await import('../src/main/security.ts')
 const { writeJsonAtomic } = await import('../src/main/persistence.ts')
 const { summarizeExecutionUsage } = await import('../src/main/telemetry.ts')
@@ -104,6 +104,26 @@ test('9router gateway injection is opt-in and respects provider and secret bound
   assert.equal(noSecrets.ANTHROPIC_BASE_URL, 'http://127.0.0.1:20128/v1')
   assert.equal(noSecrets.ANTHROPIC_API_KEY, undefined)
   assert.equal(noSecrets.ANTHROPIC_MODEL, 'kr/claude-sonnet-4.5')
+})
+
+test('9router health check reports safe connection states without exposing the API key', async () => {
+  const health = await checkNineRouter({
+    AGENT_OFFICE_9ROUTER_ENABLED: '1',
+    AGENT_OFFICE_9ROUTER_BASE_URL: 'http://127.0.0.1:20128/v1',
+    AGENT_OFFICE_9ROUTER_API_KEY: 'router-secret',
+    AGENT_OFFICE_9ROUTER_MODEL: 'provider/model',
+  }, async (_input, init) => {
+    assert.equal(init?.headers && (init.headers).authorization, 'Bearer router-secret')
+    return new Response('{}', { status: 200 })
+  })
+  assert.equal(health.status, 'healthy')
+  assert.equal(health.reachable, true)
+  assert.equal(health.apiKeyConfigured, true)
+  assert.equal('apiKey' in health, false)
+
+  const unauthorized = await checkNineRouter({ AGENT_OFFICE_9ROUTER_ENABLED: '1' }, async () => new Response('', { status: 401 }))
+  assert.equal(unauthorized.status, 'unauthorized')
+  assert.equal(unauthorized.reachable, true)
 })
 
 test('atomic persistence leaves valid JSON after concurrent writes', async () => {

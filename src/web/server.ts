@@ -6,6 +6,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import type { WebStorage } from './storage.ts'
 import type { WorkerRuntime, WorkerSession } from './worker.ts'
 import { appendTerminalOutput, clearAllTerminalOutputs, clearTerminalOutput, readTerminalOutput } from '../main/terminal-buffer-store.ts'
+import { checkNineRouter } from '../main/nine-router.ts'
 
 type WebServerOptions = {
   storage: WebStorage
@@ -15,6 +16,7 @@ type WebServerOptions = {
   worker?: WorkerRuntime
   userDataPath?: string
   rateLimit?: { maxRequests?: number; windowMs?: number }
+  nineRouterEnvironment?: Record<string, string | undefined>
 }
 type WebSocketClient = { socket: import('node:stream').Duplex; projectId?: string }
 
@@ -195,6 +197,10 @@ export function createWebServer(options: WebServerOptions) {
         return json(response, 429, { error: 'Rate limit exceeded', retryAfter })
       }
       else rate.count += 1
+
+      if (url.pathname === '/v1/integrations/9router/health' && request.method === 'GET') {
+        return json(response, 200, await checkNineRouter(options.nineRouterEnvironment ?? process.env))
+      }
 
       if (url.pathname === '/v1/directories' && request.method === 'GET') {
         return json(response, 200, listDirectories(url.searchParams.get('path') ?? undefined))
