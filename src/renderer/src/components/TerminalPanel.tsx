@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
@@ -9,7 +9,6 @@ export function TerminalPanel({ agent }: { agent: Agent | null }) {
   const terminal = useRef<Terminal | null>(null)
   const fit = useRef<FitAddon | null>(null)
   const activeId = useRef<string | null>(null)
-  const [steer, setSteer] = useState('')
 
   useEffect(() => {
     if (!host.current) return
@@ -60,17 +59,14 @@ export function TerminalPanel({ agent }: { agent: Agent | null }) {
     }
   }, [agent?.id])
 
-  async function control(action: 'pause' | 'resume' | 'interrupt' | 'steer' | 'constrain') {
+  async function control(action: 'pause' | 'resume' | 'interrupt' | 'constrain') {
     if (!agent) return
-    await window.office.controlAgent({ id: agent.id, action, text: action === 'steer' ? steer : undefined })
-    if (action === 'steer') setSteer('')
+    await window.office.controlAgent({ id: agent.id, action })
   }
 
   return <>
     <div className="terminal-host" ref={host}/>
     <div className="terminal-controls">
-      <input aria-label="Steer agent" placeholder="Send prompt to active agent" value={steer} onChange={event => setSteer(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') control('steer') }} disabled={!agent} />
-      <button onClick={() => control('steer')} disabled={!agent || !steer.trim()}>Send</button>
       <button onClick={() => control('constrain')} disabled={!agent}>Constrain</button>
       <button onClick={() => control('interrupt')} disabled={!agent}>Interrupt</button>
       {agent?.status === 'paused' ? <button onClick={() => control('resume')}>Resume</button> : <button onClick={() => control('pause')} disabled={!agent || agent.status !== 'working'}>Pause</button>}
