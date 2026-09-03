@@ -1,4 +1,5 @@
 import * as pty from 'node-pty'
+import { statSync } from 'node:fs'
 import { executionPlan, type ExecutionPermissions } from '../main/permission-policy.ts'
 import { providerAdapter } from '../main/provider-adapters.ts'
 
@@ -31,19 +32,25 @@ export function createLocalWorkerRuntime(): WorkerRuntime {
   return {
     start(input) {
       if (sessions.has(input.id)) throw new Error('Worker session already exists')
+      const cwd = input.cwd?.trim() || process.cwd()
+      try {
+        if (!statSync(cwd).isDirectory()) throw new Error('not a directory')
+      } catch {
+        throw new Error(`Working directory does not exist: ${cwd}`)
+      }
       const adapter = providerAdapter(input.command)
       const environment = adapter.injectContext({ ...process.env, ...input.environment } as Record<string, string>, '', '')
       const plan = executionPlan({
         platform: process.platform,
         permissions: input.permissions,
-        cwd: input.cwd,
+        cwd,
         userDataPath: input.userDataPath,
         shell: process.platform === 'win32'
           ? { shell: 'powershell.exe', args: ['-NoLogo', '-NoProfile', '-Command', input.command] }
           : { shell: process.env.SHELL || '/bin/bash', args: ['-lc', input.command] },
         environment,
       })
-      const term = pty.spawn(plan.file, plan.args, { name: 'xterm-256color', cols: 120, rows: 30, cwd: input.cwd, env: environment })
+      const term = pty.spawn(plan.file, plan.args, { name: 'xterm-256color', cols: 120, rows: 30, cwd, env: environment })
       const dataListeners = new Set<(data: string) => void>()
       const exitListeners = new Set<(exitCode: number) => void>()
       const session: WorkerSession = {

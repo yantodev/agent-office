@@ -77,6 +77,13 @@ try {
   const tasks = await fetch(`${base}/v1/projects/project-1/tasks`, { headers: { authorization: 'Bearer smoke-token' } })
   assert.deepEqual(await tasks.json(), [{ projectId: 'project-1', id: 'task-1' }])
   assert.equal((await fetch(`${base}/v1/cli`, { headers: { authorization: 'Bearer smoke-token' } })).status, 200)
+  assert.throws(() => worker.start({
+    id: 'missing-cwd-smoke',
+    command: 'printf should-not-run',
+    cwd: join(staticDir, 'missing-workspace'),
+    userDataPath: staticDir,
+    permissions: { filesystem: true, network: true, git: true },
+  }), /Working directory does not exist/)
 
   workerSession = worker.start({
     id: 'worker-smoke',
