@@ -1,0 +1,7 @@
+node_modules
+dist
+out
+.git
+.agent-office
+*.log
+settings.local.json
