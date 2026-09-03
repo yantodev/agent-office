@@ -4,6 +4,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createWebServer } from '../src/web/server.ts'
+import { createLocalWorkerRuntime } from '../src/web/worker.ts'
 
 const storage = {
   listProjects: () => [{ id: 'project-1', name: 'Smoke' }],
@@ -22,7 +23,9 @@ const storage = {
 const staticDir = await mkdtemp(join(tmpdir(), 'agent-office-web-smoke-'))
 await writeFile(join(staticDir, 'index.html'), '<!doctype html><title>Agent Office</title>')
 const app = createWebServer({ storage, token: 'smoke-token', staticDir })
+const worker = createLocalWorkerRuntime()
 let webSocketClient
+let workerSession
 
 function closeServer() {
   return new Promise(resolve => {
@@ -75,6 +78,28 @@ try {
   assert.deepEqual(await tasks.json(), [{ projectId: 'project-1', id: 'task-1' }])
   assert.equal((await fetch(`${base}/v1/cli`, { headers: { authorization: 'Bearer smoke-token' } })).status, 200)
 
+  workerSession = worker.start({
+    id: 'worker-smoke',
+    command: 'printf web-worker-smoke',
+    cwd: process.cwd(),
+    userDataPath: staticDir,
+    permissions: { filesystem: true, network: true, git: true },
+  })
+  const workerOutput = await new Promise((resolve, reject) => {
+    let output = ''
+    const timer = setTimeout(() => reject(new Error('Timed out waiting for web worker output')), 5_000)
+    workerSession.onData(data => {
+      output += data
+      if (output.includes('web-worker-smoke')) {
+        clearTimeout(timer)
+        resolve(output)
+      }
+    })
+  })
+  assert.match(workerOutput, /web-worker-smoke/)
+  workerSession.stop()
+  workerSession = undefined
+
   const { socket, response: handshake } = await openSocket(address.port, 'smoke-token')
   webSocketClient = socket
   assert.match(handshake, /^HTTP\/1\.1 101 Switching Protocols/)
@@ -88,6 +113,7 @@ try {
   socket.end()
   console.log('web API, static hosting, and WebSocket smoke: ok')
 } finally {
+  workerSession?.stop()
   webSocketClient?.destroy()
   await closeServer()
   await rm(staticDir, { recursive: true, force: true })

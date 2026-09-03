@@ -1,4 +1,4 @@
-import pty from 'node-pty'
+import * as pty from 'node-pty'
 import { executionPlan, type ExecutionPermissions } from '../main/permission-policy.ts'
 import { providerAdapter } from '../main/provider-adapters.ts'
 
