@@ -2,6 +2,7 @@ node_modules/
 out/
 dist/
 .agent-office/
+.agent-office-web/
 settings.local.json
 .env
 .env.*
