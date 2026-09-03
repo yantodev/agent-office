@@ -8,6 +8,8 @@ export function createWebOfficeApi(baseUrl: string, token: string): OfficeApi {
   const stateListeners = new Set<(payload: { id: string; status: Agent['status'] }) => void>()
   let socket: WebSocket | null = null
   let socketPromise: Promise<WebSocket> | null = null
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null
+  let subscribedProjectId: string | undefined
 
   const endpoint = (path: string) => `${baseUrl.replace(/\/$/, '')}${path}`
   async function request<T>(path: string, init: RequestInit = {}) {
@@ -30,9 +32,20 @@ export function createWebOfficeApi(baseUrl: string, token: string): OfficeApi {
       url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
       const current = new WebSocket(url, ['agent-office-v1', `bearer.${token}`])
       socket = current
-      current.onopen = () => { socketPromise = null; resolve(current) }
+      current.onopen = () => {
+        socketPromise = null
+        if (subscribedProjectId) current.send(JSON.stringify({ type: 'subscribe', projectId: subscribedProjectId }))
+        resolve(current)
+      }
       current.onerror = () => { socketPromise = null; socket = null; reject(new Error('WebSocket connection failed')) }
-      current.onclose = () => { socket = null; socketPromise = null }
+      current.onclose = () => {
+        socket = null
+        socketPromise = null
+        if (terminalListeners.size || exitListeners.size || stateListeners.size) {
+          if (reconnectTimer) clearTimeout(reconnectTimer)
+          reconnectTimer = setTimeout(() => { reconnectTimer = null; void webSocket().catch(() => undefined) }, 1_000)
+        }
+      }
       current.onmessage = event => {
         try {
           const message = JSON.parse(String(event.data)) as WebEvent
@@ -51,9 +64,19 @@ export function createWebOfficeApi(baseUrl: string, token: string): OfficeApi {
 
   const api = {
     listProjects: () => request<Project[]>('/v1/projects'),
-    activeProject: () => request<Project | null>('/v1/active-project'),
+    activeProject: async () => {
+      const project = await request<Project | null>('/v1/active-project')
+      subscribedProjectId = project?.id
+      if (project) await sendSocket({ type: 'subscribe', projectId: project.id })
+      return project
+    },
     createProject: (project: { id: string; name: string; path: string; useWorktrees: boolean }) => request<Project>('/v1/projects', json('POST', project)),
-    setActiveProject: (id: string) => request<Project>(`/v1/projects/${encodeURIComponent(id)}/active`, json('POST', {})),
+    setActiveProject: async (id: string) => {
+      const project = await request<Project>(`/v1/projects/${encodeURIComponent(id)}/active`, json('POST', {}))
+      subscribedProjectId = project.id
+      await sendSocket({ type: 'subscribe', projectId: project.id })
+      return project
+    },
     removeProject: (id: string) => request<{ ok: boolean }>(`/v1/projects/${encodeURIComponent(id)}`, { method: 'DELETE' }).then(result => result.ok),
     listTasks: (projectId?: string) => projectId ? request<Task[]>(`/v1/projects/${encodeURIComponent(projectId)}/tasks`) : Promise.resolve([]),
     createTask: (task: Parameters<OfficeApi['createTask']>[0]) => request<Task>(`/v1/projects/${encodeURIComponent(task.projectId)}/tasks`, json('POST', task)),

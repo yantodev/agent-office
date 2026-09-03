@@ -1,4 +1,5 @@
 import { createHash, timingSafeEqual } from 'node:crypto'
+import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { join, normalize, resolve } from 'node:path'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
@@ -124,7 +125,7 @@ export function createWebServer(options: WebServerOptions) {
   const broadcast = (event: { projectId?: string; type: string; [key: string]: unknown }) => {
     const payload = frame(event)
     for (const client of clients) {
-      if (event.projectId && client.projectId && event.projectId !== client.projectId) continue
+      if (event.projectId && event.projectId !== client.projectId) continue
       try { client.socket.write(payload) } catch { clients.delete(client) }
     }
   }
@@ -262,6 +263,7 @@ export function createWebServer(options: WebServerOptions) {
     const key = request.headers['sec-websocket-key']
     if (typeof key !== 'string') return socket.destroy()
     const protocols = String(request.headers['sec-websocket-protocol'] ?? '').split(',').map(value => value.trim())
+    if (!protocols.includes('agent-office-v1')) return socket.destroy()
     const accept = createHash('sha1').update(`${key}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`).digest('base64')
     const selectedProtocol = protocols.includes('agent-office-v1') ? '\r\nSec-WebSocket-Protocol: agent-office-v1' : ''
     socket.write(`HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${accept}${selectedProtocol}\r\n\r\n`)
@@ -281,7 +283,6 @@ export function createWebServer(options: WebServerOptions) {
 }
 
 function detectCli() {
-  const { execFileSync } = require('node:child_process') as typeof import('node:child_process')
   return ['codex', 'opencode', 'claude', 'gemini', 'qwen', 'copilot'].map(command => {
     try { return { command, installed: true, path: execFileSync('sh', ['-lc', `command -v ${command}`], { encoding: 'utf8' }).trim() } } catch { return { command, installed: false, path: null } }
   })
