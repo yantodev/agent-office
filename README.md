@@ -95,12 +95,11 @@ The development command starts the Vite renderer and launches the Electron appli
 
 The browser client uses the same React interface through an authenticated HTTP/WebSocket gateway. The browser never receives direct filesystem or process access; project workspaces and coding CLIs remain on the web server.
 
-For local development, copy `.env.example` to `.env`, set a strong token, and run the API and Vite client in separate terminals. The `web:server` script loads `.env` automatically; the file is ignored by Git.
+For local development, copy `.env.example` to `.env`, set a strong token, and run the combined API + Vite development command. The `web:dev` and `web:server` scripts load `.env` automatically; the file is ignored by Git.
 
 ```bash
 cp .env.example .env
 # edit .env and replace the token
-npm run web:server
 npm run web:dev
 ```
 
@@ -123,7 +122,7 @@ The standalone server listens on `127.0.0.1:8787` by default. Set `AGENT_OFFICE_
 | `npm run smoke:web` | Verify authenticated web API endpoints and storage transport |
 | `npm run build` | Build the main, preload, and renderer bundles |
 | `npm run web:server` | Start the standalone authenticated web API |
-| `npm run web:dev` | Start the browser client with Vite and API/WebSocket proxy |
+| `npm run web:dev` | Start the web API and browser client with Vite and API/WebSocket proxy |
 | `npm run web:build` | Build the browser client into `dist/web` |
 | `npm run web:preview` | Preview the built browser client with Vite |
 | `npm run smoke:native` | Verify native dependencies and runtime behavior |

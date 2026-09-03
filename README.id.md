@@ -94,12 +94,11 @@ Command development akan menjalankan Vite renderer dan membuka aplikasi Electron
 
 Versi browser menggunakan interface React yang sama melalui gateway HTTP/WebSocket dengan autentikasi. Browser tidak mendapat akses langsung ke filesystem atau process; workspace project dan coding CLI tetap berjalan di web server.
 
-Untuk development lokal, salin `.env.example` menjadi `.env`, isi token yang kuat, lalu jalankan API dan client Vite pada dua terminal. Script `web:server` akan membaca `.env` secara otomatis; file tersebut di-ignore oleh Git.
+Untuk development lokal, salin `.env.example` menjadi `.env`, isi token yang kuat, lalu jalankan command development gabungan API + Vite. Script `web:dev` dan `web:server` akan membaca `.env` secara otomatis; file tersebut di-ignore oleh Git.
 
 ```bash
 cp .env.example .env
 # edit .env dan ganti token
-npm run web:server
 npm run web:dev
 ```
 
@@ -120,7 +119,7 @@ Server standalone mendengarkan `127.0.0.1:8787` secara default. Gunakan `AGENT_O
 | `npm run typecheck` | Menjalankan TypeScript compiler tanpa membuat file output |
 | `npm run build` | Membuild bundle main, preload, dan renderer |
 | `npm run web:server` | Menjalankan authenticated web API standalone |
-| `npm run web:dev` | Menjalankan browser client dengan proxy API/WebSocket Vite |
+| `npm run web:dev` | Menjalankan web API dan browser client dengan proxy API/WebSocket Vite |
 | `npm run web:build` | Membuild browser client ke `dist/web` |
 | `npm run web:preview` | Preview browser client hasil build dengan Vite |
 | `npm run smoke:web` | Memverifikasi API web, static hosting, dan WebSocket |
