@@ -95,10 +95,12 @@ The development command starts the Vite renderer and launches the Electron appli
 
 The browser client uses the same React interface through an authenticated HTTP/WebSocket gateway. The browser never receives direct filesystem or process access; project workspaces and coding CLIs remain on the web server.
 
-For local development, run the API and Vite client in separate terminals:
+For local development, copy `.env.example` to `.env`, set a strong token, and run the API and Vite client in separate terminals. The `web:server` script loads `.env` automatically; the file is ignored by Git.
 
 ```bash
-AGENT_OFFICE_WEB_TOKEN=change-me npm run web:server
+cp .env.example .env
+# edit .env and replace the token
+npm run web:server
 npm run web:dev
 ```
 
@@ -106,7 +108,7 @@ Open `http://localhost:5173` and enter the same token. For a production bundle, 
 
 ```bash
 npm run web:build
-AGENT_OFFICE_WEB_TOKEN=change-me AGENT_OFFICE_WEB_STATIC_DIR=dist/web npm run web:server
+npm run web:server
 ```
 
 The standalone server listens on `127.0.0.1:8787` by default. Set `AGENT_OFFICE_WEB_HOST=0.0.0.0` only when it is protected by HTTPS/WSS through a reverse proxy. `AGENT_OFFICE_WEB_DATA` selects the SQLite data directory. A production Docker image is available with `docker build -f Dockerfile.web -t agent-office-web .`; run it with a strong token and a persistent `/data` volume.

@@ -13,7 +13,7 @@
     "smoke:unit": "node --experimental-strip-types scripts/unit-smoke.mjs",
     "smoke:web": "node --experimental-strip-types scripts/web-smoke.mjs",
     "smoke:github": "node scripts/github-cli-smoke.cjs",
-    "web:server": "node --experimental-strip-types src/web/main.ts",
+    "web:server": "node --env-file-if-exists=.env --experimental-strip-types src/web/main.ts",
     "web:dev": "vite --config vite.config.web.ts",
     "web:build": "vite build --config vite.config.web.ts",
     "web:preview": "vite preview --config vite.config.web.ts",

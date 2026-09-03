@@ -94,10 +94,12 @@ Command development akan menjalankan Vite renderer dan membuka aplikasi Electron
 
 Versi browser menggunakan interface React yang sama melalui gateway HTTP/WebSocket dengan autentikasi. Browser tidak mendapat akses langsung ke filesystem atau process; workspace project dan coding CLI tetap berjalan di web server.
 
-Untuk development lokal, jalankan API dan client Vite pada dua terminal:
+Untuk development lokal, salin `.env.example` menjadi `.env`, isi token yang kuat, lalu jalankan API dan client Vite pada dua terminal. Script `web:server` akan membaca `.env` secara otomatis; file tersebut di-ignore oleh Git.
 
 ```bash
-AGENT_OFFICE_WEB_TOKEN=change-me npm run web:server
+cp .env.example .env
+# edit .env dan ganti token
+npm run web:server
 npm run web:dev
 ```
 
@@ -105,7 +107,7 @@ Buka `http://localhost:5173`, lalu masukkan token yang sama. Untuk bundle produc
 
 ```bash
 npm run web:build
-AGENT_OFFICE_WEB_TOKEN=change-me AGENT_OFFICE_WEB_STATIC_DIR=dist/web npm run web:server
+npm run web:server
 ```
 
 Server standalone mendengarkan `127.0.0.1:8787` secara default. Gunakan `AGENT_OFFICE_WEB_HOST=0.0.0.0` hanya jika server dilindungi HTTPS/WSS melalui reverse proxy. `AGENT_OFFICE_WEB_DATA` memilih directory data SQLite. Image Docker production tersedia melalui `docker build -f Dockerfile.web -t agent-office-web .`; gunakan token kuat dan volume `/data` yang persistent.

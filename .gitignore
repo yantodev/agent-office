@@ -3,5 +3,8 @@ out/
 dist/
 .agent-office/
 settings.local.json
+.env
+.env.*
+!.env.example
 *.log
 .DS_Store
