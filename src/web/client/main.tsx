@@ -48,7 +48,12 @@ function Login({ onLogin }: { onLogin: (token: string) => Promise<void> }) {
 
 async function login(token: string) {
   const api = createWebOfficeApi(baseUrl, token)
-  await api.listProjects()
+  try {
+    await api.listProjects()
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('Unauthorized')) localStorage.removeItem(tokenKey)
+    throw error
+  }
   window.office = api
   root.render(<App />)
 }

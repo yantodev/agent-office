@@ -9,7 +9,7 @@ if (!process.env.AGENT_OFFICE_WEB_TOKEN) {
 const root = process.cwd()
 const windows = process.platform === 'win32'
 const viteBin = join(root, 'node_modules', '.bin', windows ? 'vite.cmd' : 'vite')
-const options = { cwd: root, env: process.env, stdio: 'inherit', shell: windows }
+const options = { cwd: root, env: process.env, stdio: 'inherit', shell: windows, detached: !windows }
 const children = [
   spawn(process.execPath, ['--experimental-strip-types', 'src/web/main.ts'], options),
   spawn(viteBin, ['--config', 'vite.config.web.ts'], options),
@@ -20,7 +20,11 @@ function shutdown(code) {
   if (shuttingDown) return
   shuttingDown = true
   for (const child of children) {
-    if (child.exitCode === null) child.kill('SIGTERM')
+    if (child.exitCode !== null) continue
+    try {
+      if (!windows && child.pid) process.kill(-child.pid, 'SIGTERM')
+      else child.kill('SIGTERM')
+    } catch { /* process sudah berhenti */ }
   }
   process.exitCode = code
 }

@@ -109,7 +109,7 @@ npm run web:build
 npm run web:server
 ```
 
-Server standalone mendengarkan `127.0.0.1:8787` secara default. Gunakan `AGENT_OFFICE_WEB_HOST=0.0.0.0` hanya jika server dilindungi HTTPS/WSS melalui reverse proxy. `AGENT_OFFICE_WEB_DATA` memilih directory data SQLite. Image Docker production tersedia melalui `docker build -f Dockerfile.web -t agent-office-web .`; gunakan token kuat dan volume `/data` yang persistent.
+Server standalone mendengarkan `127.0.0.1:8787` secara default. Restart web process setelah mengubah `.env` karena token dibaca saat startup. Gunakan `AGENT_OFFICE_WEB_HOST=0.0.0.0` hanya jika server dilindungi HTTPS/WSS melalui reverse proxy. `AGENT_OFFICE_WEB_DATA` memilih directory data SQLite. Image Docker production tersedia melalui `docker build -f Dockerfile.web -t agent-office-web .`; gunakan token kuat dan volume `/data` yang persistent.
 
 ## Script yang tersedia
 
