@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/logo/logo-landscape.png" alt="Agent Office" width="560">
+</p>
+
 # Agent Office
 
 Workspace desktop local-first untuk menjalankan, mengoordinasikan, dan memantau banyak coding agent dalam pixel-art office yang interaktif.

@@ -1,5 +1,7 @@
-# Agent Office
-
+<p align="center" style="margin: 0;padding: 0;">
+  <img src="assets/logo/logo-landscape.png" alt="Agent Office" width="560">
+</p>
+<h1 align="center" style="font-size: xxx-large; margin: 0">Agent Office</h1>
 Local-first desktop workspace for running, coordinating, and observing multiple coding agents in an interactive pixel-art office.
 
 [![CI](https://github.com/yantodev/agent-office/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/yantodev/agent-office/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
