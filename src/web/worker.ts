@@ -1,6 +1,6 @@
 import pty from 'node-pty'
-import { executionPlan, type ExecutionPermissions } from '../main/permission-policy'
-import { providerAdapter } from '../main/provider-adapters'
+import { executionPlan, type ExecutionPermissions } from '../main/permission-policy.ts'
+import { providerAdapter } from '../main/provider-adapters.ts'
 
 export type WorkerStartInput = {
   id: string

@@ -2,8 +2,8 @@ import { createHash, timingSafeEqual } from 'node:crypto'
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { join, normalize, resolve } from 'node:path'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
-import type { WebStorage } from './storage'
-import type { WorkerRuntime, WorkerSession } from './worker'
+import type { WebStorage } from './storage.ts'
+import type { WorkerRuntime, WorkerSession } from './worker.ts'
 
 type WebServerOptions = {
   storage: WebStorage

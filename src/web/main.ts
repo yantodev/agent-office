@@ -1,8 +1,8 @@
-import { openDatabase, migrateDatabase } from '../main/database'
+import { openDatabase, migrateDatabase } from '../main/database.ts'
 import { join } from 'node:path'
-import { createWebServer } from './server'
-import { createSqliteStorage } from './storage'
-import { createLocalWorkerRuntime } from './worker'
+import { createWebServer } from './server.ts'
+import { createSqliteStorage } from './storage.ts'
+import { createLocalWorkerRuntime } from './worker.ts'
 
 const dataPath = process.env.AGENT_OFFICE_WEB_DATA || '.agent-office-web'
 const token = process.env.AGENT_OFFICE_WEB_TOKEN

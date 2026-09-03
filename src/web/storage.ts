@@ -1,6 +1,6 @@
 import Database from 'better-sqlite3'
 import { basename, isAbsolute, join } from 'node:path'
-import { redactSecrets } from '../main/security'
+import { redactSecrets } from '../main/security.ts'
 
 export type WebStorage = {
   listProjects: () => unknown[]
