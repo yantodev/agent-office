@@ -88,7 +88,16 @@ AGENT_OFFICE_9ROUTER_MODEL=provider/model
 Bridge memetakan command Codex/OpenAI-compatible ke variable `OPENAI_*` dan command Claude ke variable
 `ANTHROPIC_*`. Biarkan `AGENT_OFFICE_9ROUTER_ENABLED=0` jika ingin memakai routing provider langsung. Endpoint harus
 menggunakan `http://` atau `https://` dan tidak boleh berisi credential pada URL. Indikator health membedakan kegagalan
-authentication, rate limit, timeout, routing, dan network.
+authentication, rate limit, timeout, routing, dan network. Profile agent harus mengaktifkan permission `secrets` agar
+API key gateway diteruskan ke child process CLI; health check tetap tersedia tanpa permission tersebut.
+
+Troubleshooting:
+
+- `unreachable` atau `timeout`: pastikan 9router berjalan dan `GET http://127.0.0.1:20128/v1/models` merespons.
+- `unauthorized`: periksa API key di dashboard 9router dan credential provider yang dipilih.
+- `rate-limited`: tunggu sampai window retry selesai atau pilih route lain yang sudah dikonfigurasi.
+- `routing`: pastikan identifier model tersedia di 9router. Gunakan `npm run smoke:9router` untuk memeriksa gateway
+  aktif tanpa mencetak credential.
 
 ## Tech stack
 

@@ -104,6 +104,11 @@ export function injectNineRouterEnvironment(command: string, environment: Record
   return injected
 }
 
+export function filterSensitiveEnvironment(environment: Record<string, string>, allowSecrets: boolean) {
+  if (allowSecrets) return environment
+  return Object.fromEntries(Object.entries(environment).filter(([key]) => !/(?:TOKEN|KEY|SECRET|PASSWORD|CREDENTIAL)/i.test(key)))
+}
+
 /**
  * Memeriksa endpoint OpenAI-compatible 9router tanpa mengembalikan API key.
  * Request bisa diinjeksi agar health check dapat diuji tanpa service eksternal.

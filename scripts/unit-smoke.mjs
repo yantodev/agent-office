@@ -7,7 +7,7 @@ import test from 'node:test'
 const { assertTaskTransition, isTaskStatus, resolveTaskReadiness } = await import('../src/main/task-lifecycle.ts')
 const { executionPlan } = await import('../src/main/permission-policy.ts')
 const { providerAdapter } = await import('../src/main/provider-adapters.ts')
-const { readNineRouterConfig, injectNineRouterEnvironment, checkNineRouter } = await import('../src/main/nine-router.ts')
+const { readNineRouterConfig, injectNineRouterEnvironment, filterSensitiveEnvironment, checkNineRouter } = await import('../src/main/nine-router.ts')
 const { canonicalPath, isCanonicalPathInside, redactSecrets } = await import('../src/main/security.ts')
 const { writeJsonAtomic } = await import('../src/main/persistence.ts')
 const { summarizeExecutionUsage } = await import('../src/main/telemetry.ts')
@@ -104,6 +104,8 @@ test('9router gateway injection is opt-in and respects provider and secret bound
   assert.equal(noSecrets.ANTHROPIC_BASE_URL, 'http://127.0.0.1:20128/v1')
   assert.equal(noSecrets.ANTHROPIC_API_KEY, undefined)
   assert.equal(noSecrets.ANTHROPIC_MODEL, 'kr/claude-sonnet-4.5')
+  assert.equal(filterSensitiveEnvironment({ SAFE_VALUE: 'ok', ROUTER_API_KEY: 'hidden' }, false).ROUTER_API_KEY, undefined)
+  assert.equal(filterSensitiveEnvironment({ ROUTER_API_KEY: 'allowed' }, true).ROUTER_API_KEY, 'allowed')
 })
 
 test('9router health check reports safe connection states without exposing the API key', async () => {

@@ -99,7 +99,7 @@ Roadmap ini disusun dari percakapan pada [ChatGPT share](https://chatgpt.com/sha
 - [x] Tambahkan UI Settings untuk konfigurasi dan test connection.
 - [x] Tambahkan error mapping untuk authentication, rate limit, timeout, dan routing failure.
 - [x] Tambahkan end-to-end test dengan 9router aktif.
-- [ ] Dokumentasikan troubleshooting dan finalisasi integrasi.
+- [x] Dokumentasikan troubleshooting dan finalisasi integrasi.
 
 ### 7. GitHub workflow
 

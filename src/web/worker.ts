@@ -2,14 +2,14 @@ import * as pty from 'node-pty'
 import { statSync } from 'node:fs'
 import { executionPlan, type ExecutionPermissions } from '../main/permission-policy.ts'
 import { providerAdapter } from '../main/provider-adapters.ts'
-import { injectNineRouterEnvironment } from '../main/nine-router.ts'
+import { filterSensitiveEnvironment, injectNineRouterEnvironment } from '../main/nine-router.ts'
 
 export type WorkerStartInput = {
   id: string
   command: string
   cwd: string
   userDataPath: string
-  permissions: ExecutionPermissions
+  permissions: ExecutionPermissions & { secrets?: boolean }
   environment?: Record<string, string>
 }
 
@@ -40,7 +40,8 @@ export function createLocalWorkerRuntime(): WorkerRuntime {
         throw new Error(`Working directory does not exist: ${cwd}`)
       }
       const adapter = providerAdapter(input.command)
-      const environment = injectNineRouterEnvironment(input.command, { ...process.env, ...input.environment } as Record<string, string>)
+      const baseEnvironment = filterSensitiveEnvironment({ ...process.env, ...input.environment } as Record<string, string>, input.permissions.secrets === true)
+      const environment = injectNineRouterEnvironment(input.command, baseEnvironment)
       const plan = executionPlan({
         platform: process.platform,
         permissions: input.permissions,

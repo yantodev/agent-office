@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Menambahkan integrasi 9router opt-in untuk CLI OpenAI-compatible dan Claude-compatible.
+- Menambahkan health check Electron/web, Settings UI, klasifikasi error, secret filtering, dan integration smoke test.
+
 ## 0.0.1-beta — 2026-09-01
 
 - Memutakhirkan Electron ke `41.10.3` dan `better-sqlite3` ke `13.0.3`; native ABI rebuild serta `npm audit` kini bersih.

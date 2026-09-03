@@ -90,7 +90,16 @@ AGENT_OFFICE_9ROUTER_MODEL=provider/model
 The bridge maps Codex/OpenAI-compatible commands to `OPENAI_*` variables and Claude commands to `ANTHROPIC_*`
 variables. Keep `AGENT_OFFICE_9ROUTER_ENABLED=0` when direct provider routing is preferred. The endpoint must use
 `http://` or `https://` and must not contain credentials in the URL. The health indicator distinguishes authentication,
-rate-limit, timeout, routing, and network failures.
+rate-limit, timeout, routing, and network failures. Agent profiles must allow the `secrets` permission for the gateway
+API key to be passed to a CLI child process; health checks remain available without that permission.
+
+Troubleshooting:
+
+- `unreachable` or `timeout`: confirm that 9router is running and that `GET http://127.0.0.1:20128/v1/models` responds.
+- `unauthorized`: verify the key in the 9router dashboard and the selected provider credentials.
+- `rate-limited`: wait for the retry window or select another configured route.
+- `routing`: verify that the configured model identifier exists in 9router. Use `npm run smoke:9router` to check the
+  active gateway without printing credentials.
 
 ## Tech stack
 

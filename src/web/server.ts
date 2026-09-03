@@ -162,7 +162,7 @@ export function createWebServer(options: WebServerOptions) {
     const agent = options.storage.getAgent(agentId)
     if (!agent) throw new Error('Agent not found')
     const profile = agent.profileId ? options.storage.listProfiles().find(value => (value as { id?: string }).id === agent.profileId) as { permissions?: Record<string, boolean> } | undefined : undefined
-    const session = options.worker.start({ id: agentId, command: agent.command, cwd: agent.cwd, userDataPath: options.userDataPath ?? '.agent-office-web', permissions: { filesystem: true, network: true, git: true, ...profile?.permissions }, environment: nineRouterEnvironment as Record<string, string> })
+    const session = options.worker.start({ id: agentId, command: agent.command, cwd: agent.cwd, userDataPath: options.userDataPath ?? '.agent-office-web', permissions: { filesystem: true, network: true, git: true, secrets: false, ...profile?.permissions }, environment: nineRouterEnvironment as Record<string, string> })
     sessions.set(agentId, session)
     options.storage.setAgentStatus(agentId, 'working')
     if (agent.projectId) broadcast({ projectId: agent.projectId, type: 'agent.state', agentId, status: 'working' })
