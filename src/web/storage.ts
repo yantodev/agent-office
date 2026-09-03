@@ -42,6 +42,7 @@ export type WebStorage = {
   createAgent: (input: { id: string; name: string; role: string; command: string; cwd?: string; projectId?: string | null; profileId?: string | null }) => unknown
   removeAgent: (id: string) => boolean
   setAgentStatus: (id: string, status: string) => void
+  recoverInterruptedAgents: () => number
   fleetSummary: (projectId?: string) => unknown | null
 }
 
@@ -217,6 +218,19 @@ export function createSqliteStorage(db: Database.Database): WebStorage {
     },
     removeAgent: id => db.prepare('DELETE FROM agents WHERE id=?').run(id).changes > 0,
     setAgentStatus: (id, status) => { db.prepare('UPDATE agents SET status=? WHERE id=?').run(status, id) },
+    recoverInterruptedAgents: () => {
+      const interrupted = db.prepare("SELECT id FROM agents WHERE status IN ('working', 'paused')").all() as Array<{ id: string }>
+      if (interrupted.length === 0) return 0
+      const recover = db.transaction(() => {
+        db.prepare("UPDATE agents SET status='offline' WHERE status IN ('working', 'paused')").run()
+        for (const agent of interrupted) {
+          db.prepare("UPDATE tasks SET status='failed', blocked_reason=NULL, error=?, updated_at=CURRENT_TIMESTAMP WHERE agent_id=? AND status='running'")
+            .run('Web server restarted before the task completed', agent.id)
+        }
+      })
+      recover()
+      return interrupted.length
+    },
     fleetSummary: projectId => {
       const scope = projectId ? ' WHERE project_id=?' : ''
       const args = projectId ? [projectId] : []

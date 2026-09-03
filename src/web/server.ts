@@ -146,7 +146,13 @@ export function createWebServer(options: WebServerOptions) {
 
   const startWorker = (agentId: string, taskId?: string) => {
     if (!options.worker) throw new Error('Web worker runtime is not configured')
-    if (sessions.has(agentId)) throw new Error('Agent already has an active session')
+    const liveSession = options.worker.get(agentId)
+    if (liveSession) {
+      sessions.set(agentId, liveSession)
+      if (taskId) throw new Error('Agent already has an active session')
+      return true
+    }
+    sessions.delete(agentId)
     const agent = options.storage.getAgent(agentId)
     if (!agent) throw new Error('Agent not found')
     const profile = agent.profileId ? options.storage.listProfiles().find(value => (value as { id?: string }).id === agent.profileId) as { permissions?: Record<string, boolean> } | undefined : undefined
@@ -261,8 +267,14 @@ export function createWebServer(options: WebServerOptions) {
         if (request.method === 'POST' && segments[3] === 'stop') return json(response, 200, { ok: options.worker?.stop(id) ?? false })
         if (request.method === 'POST' && segments[3] === 'control') {
           const input = await body(request, options.maxBodyBytes ?? 1_000_000)
-          const session = sessions.get(id)
-          if (!session) return json(response, 409, { error: 'Agent has no active session' })
+        const session = options.worker?.get(id) ?? sessions.get(id)
+        if (!session) {
+          const staleAgent = options.storage.getAgent(id)
+          options.storage.setAgentStatus(id, 'offline')
+          if (staleAgent?.projectId) broadcast({ projectId: staleAgent.projectId, type: 'agent.state', agentId: id, status: 'offline' })
+          return json(response, 409, { error: 'Agent has no active session; status reset to offline', status: 'offline' })
+        }
+        sessions.set(id, session)
           if (input.action === 'steer' || input.action === 'constrain') session.write(`${String(input.text ?? '')}\n`)
           else if (input.action === 'interrupt') session.write('\u0003')
           else if (input.action === 'pause' || input.action === 'resume') return json(response, 409, { error: 'Pause/resume requires a process supervisor on the web worker' })

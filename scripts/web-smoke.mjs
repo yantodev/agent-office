@@ -5,6 +5,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createWebServer } from '../src/web/server.ts'
 import { createLocalWorkerRuntime } from '../src/web/worker.ts'
+import { migrateDatabase, openDatabase } from '../src/main/database.ts'
+import { createSqliteStorage } from '../src/web/storage.ts'
 
 const storage = {
   listProjects: () => [{ id: 'project-1', name: 'Smoke' }],
@@ -24,8 +26,23 @@ const storage = {
 }
 const staticDir = await mkdtemp(join(tmpdir(), 'agent-office-web-smoke-'))
 await writeFile(join(staticDir, 'index.html'), '<!doctype html><title>Agent Office</title>')
+const recoveryDatabase = openDatabase(staticDir)
+migrateDatabase(recoveryDatabase)
+recoveryDatabase.prepare('INSERT INTO projects (id, name, path) VALUES (?, ?, ?)').run('recovery-project', 'Recovery', staticDir)
+recoveryDatabase.prepare('INSERT INTO agents (id, name, command, cwd, role, project_id, status) VALUES (?, ?, ?, ?, ?, ?, ?)').run('recovery-agent', 'Recovery', 'sh', process.cwd(), 'Test', 'recovery-project', 'working')
+const recoveryStorage = createSqliteStorage(recoveryDatabase)
+assert.equal(recoveryStorage.recoverInterruptedAgents(), 1)
+assert.equal(recoveryStorage.listAgents()[0].status, 'offline')
+recoveryDatabase.close()
 const app = createWebServer({ storage, token: 'smoke-token', staticDir })
 const limitedApp = createWebServer({ storage, token: 'smoke-token', rateLimit: { maxRequests: 1, windowMs: 60_000 } })
+let staleStatus
+const controlStorage = {
+  ...storage,
+  getAgent: id => id === 'stale-agent' ? { id, name: 'Stale', command: 'sh', cwd: process.cwd(), role: 'Test', projectId: 'project-1' } : null,
+  setAgentStatus: (_id, status) => { staleStatus = status },
+}
+const controlApp = createWebServer({ storage: controlStorage, token: 'smoke-token', worker: createLocalWorkerRuntime() })
 const worker = createLocalWorkerRuntime()
 let webSocketClient
 let workerSession
@@ -74,6 +91,12 @@ try {
   await new Promise(resolve => limitedApp.server.listen(0, '127.0.0.1', resolve))
   const limitedAddress = limitedApp.server.address()
   const limitedBase = `http://127.0.0.1:${limitedAddress.port}`
+  await new Promise(resolve => controlApp.server.listen(0, '127.0.0.1', resolve))
+  const controlAddress = controlApp.server.address()
+  const controlResponse = await fetch(`http://127.0.0.1:${controlAddress.port}/v1/agents/stale-agent/control`, { method: 'POST', headers: { authorization: 'Bearer smoke-token', 'content-type': 'application/json' }, body: JSON.stringify({ action: 'interrupt' }) })
+  assert.equal(controlResponse.status, 409)
+  assert.equal((await controlResponse.json()).status, 'offline')
+  assert.equal(staleStatus, 'offline')
   assert.equal((await fetch(`${base}/`)).status, 200)
   assert.match(await (await fetch(`${base}/`)).text(), /Agent Office/)
   assert.equal((await fetch(`${base}/healthz`)).status, 200)
@@ -144,6 +167,11 @@ try {
     limitedApp.server.closeAllConnections?.()
     limitedApp.server.closeIdleConnections?.()
     limitedApp.server.close(() => resolve())
+  })
+  await new Promise(resolve => {
+    controlApp.server.closeAllConnections?.()
+    controlApp.server.closeIdleConnections?.()
+    controlApp.server.close(() => resolve())
   })
   await rm(staticDir, { recursive: true, force: true })
 }

@@ -1300,7 +1300,11 @@ function registerIpc() {
   })
   ipcMain.handle('agent:control', (event, input: { id: string; action: 'pause' | 'resume' | 'interrupt' | 'steer' | 'constrain'; text?: string }) => {
     const session = sessions.get(input.id)
-    if (!session) throw new Error('Agent has no active session')
+    if (!session) {
+      db.prepare("UPDATE agents SET status='offline' WHERE id=?").run(input.id)
+      event.sender.send('agent:state', { id: input.id, status: 'offline' })
+      throw new Error('Agent has no active session; status reset to offline')
+    }
     const agentProject = db.prepare('SELECT project_id AS projectId, command FROM agents WHERE id=?').get(input.id) as { projectId?: string; command?: string } | undefined
     const project = agentProject?.projectId ? getProject(agentProject.projectId) : undefined
     if (input.action === 'steer') {
