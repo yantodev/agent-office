@@ -62,7 +62,30 @@ Data project dan state koordinasi disimpan di komputer lokal. Integrasi dengan G
 - Menandai dan mempertahankan memory penting.
 - Menggunakan deterministic local vector search secara opsional.
 - Mengimpor GitHub issue dan menyiapkan atau membuat pull request melalui workflow `gh` yang memerlukan approval.
+- Merutekan traffic CLI yang kompatibel dengan OpenAI dan Claude melalui gateway 9router lokal secara opsional.
 - Menyimpan append-only activity log dan workflow settings diff yang sudah di-redact, memiliki backup, serta atomic replacement.
+
+### Integrasi 9router
+
+Agent Office dapat menggunakan [9router](https://github.com/decolua/9router) sebagai gateway model lokal opsional.
+Integrasi ini bersifat opt-in dan berlaku untuk session agent CLI yang berjalan di komputer yang sama atau server web
+worker. Agent Office tidak menyimpan atau mengekspos API key gateway ke renderer maupun browser.
+
+1. Install dan jalankan 9router, lalu konfigurasi provider dan API key di 9router.
+2. Salin `.env.example` menjadi `.env`, lalu isi konfigurasi berikut:
+
+```dotenv
+AGENT_OFFICE_9ROUTER_ENABLED=1
+AGENT_OFFICE_9ROUTER_BASE_URL=http://127.0.0.1:20128/v1
+AGENT_OFFICE_9ROUTER_API_KEY=api-key-9router-anda
+AGENT_OFFICE_9ROUTER_MODEL=provider/model
+```
+
+3. Restart Agent Office atau web worker setelah mengubah `.env`.
+
+Bridge memetakan command Codex/OpenAI-compatible ke variable `OPENAI_*` dan command Claude ke variable
+`ANTHROPIC_*`. Biarkan `AGENT_OFFICE_9ROUTER_ENABLED=0` jika ingin memakai routing provider langsung. Endpoint harus
+menggunakan `http://` atau `https://` dan tidak boleh berisi credential pada URL.
 
 ## Tech stack
 

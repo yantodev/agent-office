@@ -64,7 +64,30 @@ integrations with Git, GitHub CLI, and installed coding-agent providers.
 - Pin and retain important memory entries.
 - Optionally use deterministic local vector search.
 - Import GitHub issues and prepare or create pull requests through an approval-gated `gh` workflow.
+- Optionally route OpenAI-compatible and Claude-compatible CLI traffic through a local 9router gateway.
 - Maintain an append-only activity log and a redacted settings-diff workflow with backup and atomic replacement.
+
+### 9router integration
+
+Agent Office can use [9router](https://github.com/decolua/9router) as an optional local model gateway. The integration
+is opt-in and applies to agent CLI sessions running on the same machine or web worker server. Agent Office does not
+store or expose the gateway API key to the renderer or browser.
+
+1. Install and start 9router, then configure its provider and API key.
+2. Copy `.env.example` to `.env` and set the following values:
+
+```dotenv
+AGENT_OFFICE_9ROUTER_ENABLED=1
+AGENT_OFFICE_9ROUTER_BASE_URL=http://127.0.0.1:20128/v1
+AGENT_OFFICE_9ROUTER_API_KEY=your-9router-api-key
+AGENT_OFFICE_9ROUTER_MODEL=provider/model
+```
+
+3. Restart Agent Office or the web worker after changing `.env`.
+
+The bridge maps Codex/OpenAI-compatible commands to `OPENAI_*` variables and Claude commands to `ANTHROPIC_*`
+variables. Keep `AGENT_OFFICE_9ROUTER_ENABLED=0` when direct provider routing is preferred. The endpoint must use
+`http://` or `https://` and must not contain credentials in the URL.
 
 ## Tech stack
 

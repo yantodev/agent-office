@@ -2,6 +2,7 @@ import * as pty from 'node-pty'
 import { statSync } from 'node:fs'
 import { executionPlan, type ExecutionPermissions } from '../main/permission-policy.ts'
 import { providerAdapter } from '../main/provider-adapters.ts'
+import { injectNineRouterEnvironment } from '../main/nine-router.ts'
 
 export type WorkerStartInput = {
   id: string
@@ -39,7 +40,7 @@ export function createLocalWorkerRuntime(): WorkerRuntime {
         throw new Error(`Working directory does not exist: ${cwd}`)
       }
       const adapter = providerAdapter(input.command)
-      const environment = adapter.injectContext({ ...process.env, ...input.environment } as Record<string, string>, '', '')
+      const environment = injectNineRouterEnvironment(input.command, { ...process.env, ...input.environment } as Record<string, string>)
       const plan = executionPlan({
         platform: process.platform,
         permissions: input.permissions,

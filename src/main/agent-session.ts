@@ -1,6 +1,7 @@
 import pty from 'node-pty'
 import { executionPlan, type ExecutionPermissions } from './permission-policy'
 import { providerAdapter } from './provider-adapters'
+import { injectNineRouterEnvironment } from './nine-router'
 
 type ShellPlan = { shell: string; args: string[] }
 
@@ -16,13 +17,14 @@ export function spawnAgentSession(input: {
   taskId?: string
   taskPrompt: string
 }) {
+  const environment = injectNineRouterEnvironment(input.command, input.environment)
   const plan = executionPlan({
     platform: process.platform,
     permissions: input.permissions,
     cwd: input.cwd,
     userDataPath: input.userDataPath,
     shell: input.shell,
-    environment: input.environment,
+    environment,
   })
   const adapter = providerAdapter(input.command)
   return pty.spawn(plan.file, plan.args, {
@@ -31,7 +33,7 @@ export function spawnAgentSession(input: {
     rows: 30,
     cwd: input.cwd,
     env: adapter.injectContext({
-      ...input.environment,
+      ...environment,
       AGENT_OFFICE_PROFILE: input.profileName ?? '',
       AGENT_OFFICE_TASK_ID: input.taskId ?? '',
     }, input.soul, input.taskPrompt) as Record<string, string>

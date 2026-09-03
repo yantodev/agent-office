@@ -89,6 +89,18 @@ Roadmap ini disusun dari percakapan pada [ChatGPT share](https://chatgpt.com/sha
 
 ## P2 — Integrasi, safety, dan pengalaman pengguna
 
+### 11. Integrasi 9router
+
+- [x] Tambahkan konfigurasi environment 9router yang opt-in dengan endpoint default lokal.
+- [x] Hubungkan bridge 9router ke session Electron dan web worker.
+- [x] Petakan konfigurasi gateway ke environment OpenAI-compatible dan Claude-compatible.
+- [x] Pastikan secret filtering tetap berlaku dan API key tidak dikirim ke renderer/browser.
+- [ ] Tambahkan health check/status koneksi 9router melalui IPC Electron dan endpoint web.
+- [ ] Tambahkan UI Settings untuk konfigurasi dan test connection.
+- [ ] Tambahkan error mapping untuk authentication, rate limit, timeout, dan routing failure.
+- [ ] Tambahkan end-to-end test dengan 9router aktif.
+- [ ] Dokumentasikan troubleshooting dan finalisasi integrasi.
+
 ### 7. GitHub workflow
 
 - [x] Hubungkan GitHub issue → task → agent → branch/worktree → review → pull request melalui `gh` dan approval gate.

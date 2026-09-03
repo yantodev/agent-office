@@ -7,6 +7,7 @@ import test from 'node:test'
 const { assertTaskTransition, isTaskStatus, resolveTaskReadiness } = await import('../src/main/task-lifecycle.ts')
 const { executionPlan } = await import('../src/main/permission-policy.ts')
 const { providerAdapter } = await import('../src/main/provider-adapters.ts')
+const { readNineRouterConfig, injectNineRouterEnvironment } = await import('../src/main/nine-router.ts')
 const { canonicalPath, isCanonicalPathInside, redactSecrets } = await import('../src/main/security.ts')
 const { writeJsonAtomic } = await import('../src/main/persistence.ts')
 const { summarizeExecutionUsage } = await import('../src/main/telemetry.ts')
@@ -66,6 +67,43 @@ test('provider adapters isolate context and terminal controls per CLI', () => {
   assert.equal(adapter.submitPrompt('hello'), 'hello\r')
   assert.equal(adapter.interrupt, '\u0003')
   assert.equal(providerAdapter('github-copilot.exe').id, 'copilot')
+})
+
+test('9router gateway injection is opt-in and respects provider and secret boundaries', () => {
+  const disabled = injectNineRouterEnvironment('codex', { AGENT_OFFICE_9ROUTER_API_KEY: 'hidden' })
+  assert.equal(disabled.OPENAI_BASE_URL, undefined)
+
+  const config = readNineRouterConfig({
+    AGENT_OFFICE_9ROUTER_ENABLED: '1',
+    AGENT_OFFICE_9ROUTER_BASE_URL: 'http://127.0.0.1:20128/v1/',
+    AGENT_OFFICE_9ROUTER_API_KEY: 'router-key',
+    AGENT_OFFICE_9ROUTER_MODEL: 'openrouter/auto',
+  })
+  assert.deepEqual(config, {
+    enabled: true,
+    baseUrl: 'http://127.0.0.1:20128/v1',
+    apiKey: 'router-key',
+    model: 'openrouter/auto',
+  })
+
+  const openAi = injectNineRouterEnvironment('codex', {
+    AGENT_OFFICE_9ROUTER_ENABLED: '1',
+    AGENT_OFFICE_9ROUTER_BASE_URL: 'http://127.0.0.1:20128/v1',
+    AGENT_OFFICE_9ROUTER_API_KEY: 'router-key',
+    AGENT_OFFICE_9ROUTER_MODEL: 'openrouter/auto',
+  })
+  assert.equal(openAi.OPENAI_BASE_URL, 'http://127.0.0.1:20128/v1')
+  assert.equal(openAi.OPENAI_API_KEY, 'router-key')
+  assert.equal(openAi.OPENAI_MODEL, 'openrouter/auto')
+
+  const noSecrets = injectNineRouterEnvironment('claude', {
+    AGENT_OFFICE_9ROUTER_ENABLED: '1',
+    AGENT_OFFICE_9ROUTER_BASE_URL: 'http://127.0.0.1:20128/v1',
+    AGENT_OFFICE_9ROUTER_MODEL: 'kr/claude-sonnet-4.5',
+  })
+  assert.equal(noSecrets.ANTHROPIC_BASE_URL, 'http://127.0.0.1:20128/v1')
+  assert.equal(noSecrets.ANTHROPIC_API_KEY, undefined)
+  assert.equal(noSecrets.ANTHROPIC_MODEL, 'kr/claude-sonnet-4.5')
 })
 
 test('atomic persistence leaves valid JSON after concurrent writes', async () => {
