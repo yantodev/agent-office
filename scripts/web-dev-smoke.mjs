@@ -57,7 +57,7 @@ async function waitFor(url, predicate, timeout = 10_000) {
 }
 
 try {
-  await waitFor('http://127.0.0.1:5187/healthz', response => response.status === 200)
+  await waitFor('http://127.0.0.1:5187/healthz', response => response.status === 200, 120_000)
   const projects = await fetch('http://127.0.0.1:5187/v1/projects', { headers: { authorization: 'Bearer web-dev-smoke-token' } })
   assert.equal(projects.status, 200)
   console.log('web dev startup smoke: ok')

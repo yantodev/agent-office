@@ -69,7 +69,7 @@ Data project dan state koordinasi disimpan di komputer lokal. Integrasi dengan G
 
 ## Persyaratan
 
-- Node.js 22 atau lebih baru direkomendasikan.
+- Node.js 20 atau lebih baru diperlukan untuk browser server; Node.js 22 atau lebih baru direkomendasikan untuk build Electron.
 - npm 10 atau lebih baru direkomendasikan.
 - Git untuk fitur project dan worktree.
 - Opsional: GitHub CLI (`gh`) yang sudah authenticated untuk workflow GitHub.
@@ -109,6 +109,8 @@ npm run web:build
 npm run web:server
 ```
 
+Script web otomatis memeriksa native module dan melakukan rebuild untuk runtime Node yang sedang aktif jika diperlukan. Rebuild pertama dapat memerlukan beberapa menit pada Node 20 karena prebuilt binary mungkin tidak tersedia; pasang build tools native di atas. Jika kembali menggunakan Electron setelah menjalankan script browser, jalankan `npm run electron:rebuild`, karena Electron dan Node menggunakan ABI native module yang berbeda.
+
 Server standalone mendengarkan `127.0.0.1:8787` secara default. Restart web process setelah mengubah `.env` karena token dibaca saat startup. Gunakan `AGENT_OFFICE_WEB_HOST=0.0.0.0` hanya jika server dilindungi HTTPS/WSS melalui reverse proxy. `AGENT_OFFICE_WEB_DATA` memilih directory data SQLite. Image Docker production tersedia melalui `docker build -f Dockerfile.web -t agent-office-web .`; gunakan token kuat dan volume `/data` yang persistent.
 
 ## Script yang tersedia
@@ -120,6 +122,8 @@ Server standalone mendengarkan `127.0.0.1:8787` secara default. Restart web proc
 | `npm run build` | Membuild bundle main, preload, dan renderer |
 | `npm run web:server` | Menjalankan authenticated web API standalone |
 | `npm run web:dev` | Menjalankan web API dan browser client dengan proxy API/WebSocket Vite |
+| `npm run web:rebuild-native` | Rebuild native module untuk runtime Node yang sedang aktif |
+| `npm run electron:rebuild` | Rebuild native module untuk runtime Electron yang terpasang |
 | `npm run web:build` | Membuild browser client ke `dist/web` |
 | `npm run web:preview` | Preview browser client hasil build dengan Vite |
 | `npm run smoke:web` | Memverifikasi API web, static hosting, dan WebSocket |

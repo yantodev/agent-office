@@ -70,7 +70,7 @@ The application is designed to keep project data and coordination state on the l
 
 ## Requirements
 
-- Node.js 22 or newer is recommended.
+- Node.js 20 or newer is required for the browser server; Node.js 22 or newer is recommended for the Electron build.
 - npm 10 or newer is recommended.
 - Git for project and worktree features.
 - Optional: GitHub CLI (`gh`) authenticated for GitHub workflows.
@@ -110,6 +110,8 @@ npm run web:build
 npm run web:server
 ```
 
+The web scripts automatically check the native modules and rebuild them for the active Node runtime when needed. The first rebuild can take a few minutes on Node 20 because a prebuilt binary may not be available; install the native build tools above. If you switch back to Electron after using the browser scripts, run `npm run electron:rebuild`, because Electron and Node use different native module ABIs.
+
 The standalone server listens on `127.0.0.1:8787` by default. Restart the web process after changing `.env`, because the token is loaded at startup. Set `AGENT_OFFICE_WEB_HOST=0.0.0.0` only when it is protected by HTTPS/WSS through a reverse proxy. `AGENT_OFFICE_WEB_DATA` selects the SQLite data directory. A production Docker image is available with `docker build -f Dockerfile.web -t agent-office-web .`; run it with a strong token and a persistent `/data` volume.
 
 ## Available scripts
@@ -123,6 +125,8 @@ The standalone server listens on `127.0.0.1:8787` by default. Restart the web pr
 | `npm run build` | Build the main, preload, and renderer bundles |
 | `npm run web:server` | Start the standalone authenticated web API |
 | `npm run web:dev` | Start the web API and browser client with Vite and API/WebSocket proxy |
+| `npm run web:rebuild-native` | Rebuild native modules for the active Node runtime |
+| `npm run electron:rebuild` | Rebuild native modules for the installed Electron runtime |
 | `npm run web:build` | Build the browser client into `dist/web` |
 | `npm run web:preview` | Preview the built browser client with Vite |
 | `npm run smoke:native` | Verify native dependencies and runtime behavior |

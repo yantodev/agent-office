@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { join } from 'node:path'
 
 if (!process.env.AGENT_OFFICE_WEB_TOKEN) {
@@ -7,11 +7,19 @@ if (!process.env.AGENT_OFFICE_WEB_TOKEN) {
 }
 
 const root = process.cwd()
+const nativeCheck = spawnSync(process.execPath, [join(root, 'scripts', 'ensure-web-native.mjs')], {
+  cwd: root,
+  env: process.env,
+  stdio: 'inherit',
+})
+if (nativeCheck.error || nativeCheck.status !== 0) process.exit(nativeCheck.status ?? 1)
+
 const windows = process.platform === 'win32'
 const viteBin = join(root, 'node_modules', '.bin', windows ? 'vite.cmd' : 'vite')
+const tsxCli = join(root, 'node_modules', 'tsx', 'dist', 'cli.mjs')
 const options = { cwd: root, env: process.env, stdio: 'inherit', shell: windows, detached: !windows }
 const children = [
-  spawn(process.execPath, ['--experimental-strip-types', 'src/web/main.ts'], options),
+  spawn(process.execPath, [tsxCli, 'src/web/main.ts'], options),
   spawn(viteBin, ['--config', 'vite.config.web.ts'], options),
 ]
 let shuttingDown = false
