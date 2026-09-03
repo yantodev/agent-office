@@ -372,14 +372,17 @@ function WorkspacesCenter({ projects, activeProject, projectDraft, onDraftChange
     try {
       setPickerError('')
       setPicker(await window.office.listDirectories(path))
+      return true
     } catch (error) {
       setPickerError(errorMessage(error))
+      return false
     }
   }
 
   async function openPicker(target: 'new' | 'edit', path?: string) {
     setPickerTarget(target)
-    await browse(path)
+    const loaded = await browse(path)
+    if (!loaded && target === 'edit' && path) await browse()
   }
 
   function chooseCurrentDirectory() {
