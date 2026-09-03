@@ -91,6 +91,26 @@ npm run dev
 
 The development command starts the Vite renderer and launches the Electron application.
 
+## Browser deployment
+
+The browser client uses the same React interface through an authenticated HTTP/WebSocket gateway. The browser never receives direct filesystem or process access; project workspaces and coding CLIs remain on the web server.
+
+For local development, run the API and Vite client in separate terminals:
+
+```bash
+AGENT_OFFICE_WEB_TOKEN=change-me npm run web:server
+npm run web:dev
+```
+
+Open `http://localhost:5173` and enter the same token. For a production bundle, use:
+
+```bash
+npm run web:build
+AGENT_OFFICE_WEB_TOKEN=change-me AGENT_OFFICE_WEB_STATIC_DIR=dist/web npm run web:server
+```
+
+The standalone server listens on `127.0.0.1:8787` by default. Set `AGENT_OFFICE_WEB_HOST=0.0.0.0` only when it is protected by HTTPS/WSS through a reverse proxy. `AGENT_OFFICE_WEB_DATA` selects the SQLite data directory. A production Docker image is available with `docker build -f Dockerfile.web -t agent-office-web .`; run it with a strong token and a persistent `/data` volume.
+
 ## Available scripts
 
 | Command | Description |
@@ -101,6 +121,9 @@ The development command starts the Vite renderer and launches the Electron appli
 | `npm run smoke:web` | Verify authenticated web API endpoints and storage transport |
 | `npm run build` | Build the main, preload, and renderer bundles |
 | `npm run web:server` | Start the standalone authenticated web API |
+| `npm run web:dev` | Start the browser client with Vite and API/WebSocket proxy |
+| `npm run web:build` | Build the browser client into `dist/web` |
+| `npm run web:preview` | Preview the built browser client with Vite |
 | `npm run smoke:native` | Verify native dependencies and runtime behavior |
 | `npm run smoke:main` | Run main-process integration smoke tests |
 | `npm run smoke:migration` | Verify database migration behavior |

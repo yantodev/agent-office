@@ -90,6 +90,26 @@ npm run dev
 
 Command development akan menjalankan Vite renderer dan membuka aplikasi Electron.
 
+## Menjalankan versi browser
+
+Versi browser menggunakan interface React yang sama melalui gateway HTTP/WebSocket dengan autentikasi. Browser tidak mendapat akses langsung ke filesystem atau process; workspace project dan coding CLI tetap berjalan di web server.
+
+Untuk development lokal, jalankan API dan client Vite pada dua terminal:
+
+```bash
+AGENT_OFFICE_WEB_TOKEN=change-me npm run web:server
+npm run web:dev
+```
+
+Buka `http://localhost:5173`, lalu masukkan token yang sama. Untuk bundle production:
+
+```bash
+npm run web:build
+AGENT_OFFICE_WEB_TOKEN=change-me AGENT_OFFICE_WEB_STATIC_DIR=dist/web npm run web:server
+```
+
+Server standalone mendengarkan `127.0.0.1:8787` secara default. Gunakan `AGENT_OFFICE_WEB_HOST=0.0.0.0` hanya jika server dilindungi HTTPS/WSS melalui reverse proxy. `AGENT_OFFICE_WEB_DATA` memilih directory data SQLite. Image Docker production tersedia melalui `docker build -f Dockerfile.web -t agent-office-web .`; gunakan token kuat dan volume `/data` yang persistent.
+
 ## Script yang tersedia
 
 | Command | Deskripsi |
@@ -97,6 +117,11 @@ Command development akan menjalankan Vite renderer dan membuka aplikasi Electron
 | `npm run dev` | Menjalankan environment development Electron |
 | `npm run typecheck` | Menjalankan TypeScript compiler tanpa membuat file output |
 | `npm run build` | Membuild bundle main, preload, dan renderer |
+| `npm run web:server` | Menjalankan authenticated web API standalone |
+| `npm run web:dev` | Menjalankan browser client dengan proxy API/WebSocket Vite |
+| `npm run web:build` | Membuild browser client ke `dist/web` |
+| `npm run web:preview` | Preview browser client hasil build dengan Vite |
+| `npm run smoke:web` | Memverifikasi API web, static hosting, dan WebSocket |
 | `npm run smoke:native` | Memverifikasi native dependency dan runtime |
 | `npm run smoke:main` | Menjalankan integration smoke test main process |
 | `npm run smoke:migration` | Memverifikasi behavior database migration |
