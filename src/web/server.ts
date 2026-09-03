@@ -6,7 +6,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import type { WebStorage } from './storage.ts'
 import type { WorkerRuntime, WorkerSession } from './worker.ts'
 import { appendTerminalOutput, clearAllTerminalOutputs, clearTerminalOutput, readTerminalOutput } from '../main/terminal-buffer-store.ts'
-import { checkNineRouter, mergeNineRouterEnvironment, type NineRouterSettingsInput } from '../main/nine-router.ts'
+import { checkNineRouter, listNineRouterModels, mergeNineRouterEnvironment, type NineRouterSettingsInput } from '../main/nine-router.ts'
 
 type WebServerOptions = {
   storage: WebStorage
@@ -201,6 +201,9 @@ export function createWebServer(options: WebServerOptions) {
 
       if (url.pathname === '/v1/integrations/9router/health' && request.method === 'GET') {
         return json(response, 200, await checkNineRouter(nineRouterEnvironment))
+      }
+      if (url.pathname === '/v1/integrations/9router/models' && request.method === 'GET') {
+        return json(response, 200, { models: await listNineRouterModels(nineRouterEnvironment) })
       }
       if (url.pathname === '/v1/integrations/9router/config' && request.method === 'POST') {
         const input = await body(request, options.maxBodyBytes ?? 1_000_000) as unknown as NineRouterSettingsInput

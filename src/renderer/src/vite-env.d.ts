@@ -18,6 +18,7 @@ declare global {
   type Agent = { id:string; name:string; command:string; cwd:string; role:string; projectId?:string|null; projectName?:string; worktreePath?:string|null; branch?:string|null; dirty?:boolean; profileId?:string|null; profileName?:string; soul?:string; status:'idle'|'working'|'paused'|'error'|'offline' }
   type CliInfo = { command:string; installed:boolean; path:string|null }
   type NineRouterHealth = { enabled:boolean; status:'disabled'|'healthy'|'unauthorized'|'rate-limited'|'invalid'|'unreachable'|'error'; reachable:boolean; configured:boolean; apiKeyConfigured:boolean; baseUrl:string; model?:string; latencyMs:number|null; checkedAt:string; errorCode?:'authentication'|'rate_limit'|'timeout'|'routing'|'network'; error?:string }
+  type NineRouterModel = { id:string; ownedBy?:string; free:boolean }
 
   interface Window {
     office: {
@@ -46,6 +47,7 @@ declare global {
       fleetSummary(projectId?:string): Promise<FleetSummary|null>
       githubStatus(projectId?:string): Promise<{ installed:boolean; authenticated:boolean }>
       nineRouterHealth(): Promise<NineRouterHealth>
+      listNineRouterModels(): Promise<NineRouterModel[]>
       configureNineRouter(config: { enabled:boolean; baseUrl:string; model?:string; apiKey?:string }): Promise<NineRouterHealth>
       importGithubIssues(projectId?:string): Promise<Array<{ issueNumber:number; taskId:string; created:boolean }>>
       prepareGithubPr(input: { taskId:string; title?:string; body?:string }): Promise<{ approvalId:string; diffStat:string }>

@@ -167,8 +167,8 @@ npm run web:server
 
 The web scripts automatically check the native modules and rebuild them for the active Node runtime when needed. The
 first rebuild can take a few minutes on Node 20 because a prebuilt binary may not be available; install the native build
-tools above. If you switch back to Electron after using the browser scripts, run `npm run electron:rebuild`, because
-Electron and Node use different native module ABIs.
+tools above. `npm run dev` automatically runs the Electron rebuild hook before starting. If you switch back to Electron
+after using the browser scripts, this prevents the native module ABI from remaining compiled for Node instead of Electron.
 
 The standalone server listens on `127.0.0.1:8787` by default. Restart the web process after changing `.env`, because the
 token is loaded at startup. Set `AGENT_OFFICE_WEB_HOST=0.0.0.0` only when it is protected by HTTPS/WSS through a reverse

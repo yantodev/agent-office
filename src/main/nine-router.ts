@@ -34,6 +34,12 @@ export type NineRouterSettingsInput = {
   apiKey?: string | null
 }
 
+export type NineRouterModel = {
+  id: string
+  ownedBy?: string
+  free: boolean
+}
+
 function normalizeBaseUrl(value: string) {
   const url = new URL(value)
   if (!['http:', 'https:'].includes(url.protocol)) throw new Error('9router endpoint must use HTTP or HTTPS')
@@ -153,6 +159,38 @@ export async function checkNineRouter(
     const timedOut = error instanceof Error && error.name === 'AbortError'
     const message = timedOut ? '9router health check timed out' : safeHealthError(error)
     return { ...base, status: 'unreachable', reachable: false, latencyMs: Date.now() - startedAt, errorCode: timedOut ? 'timeout' : 'network', error: message }
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+export async function listNineRouterModels(
+  environment: Record<string, string | undefined>,
+  request: (input: string, init?: RequestInit) => Promise<Response> = fetch,
+  timeoutMs = 4_000,
+): Promise<NineRouterModel[]> {
+  const config = readNineRouterConfig(environment)
+  if (!config.enabled) return []
+  normalizeBaseUrl(config.baseUrl)
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    const headers: Record<string, string> = { accept: 'application/json' }
+    if (config.apiKey) headers.authorization = `Bearer ${config.apiKey}`
+    const response = await request(`${config.baseUrl}/models`, { method: 'GET', headers, signal: controller.signal })
+    if (!response.ok) {
+      if (response.status === 401 || response.status === 403) throw new Error('9router rejected the API key')
+      if (response.status === 429) throw new Error('9router rate limit exceeded')
+      throw new Error(`9router returned HTTP ${response.status}`)
+    }
+    const payload = await response.json() as { data?: Array<{ id?: unknown; owned_by?: unknown }> }
+    return (payload.data ?? [])
+      .filter(model => typeof model.id === 'string' && model.id.trim())
+      .map(model => {
+        const id = (model.id as string).trim()
+        return { id, ownedBy: typeof model.owned_by === 'string' ? model.owned_by : undefined, free: /(?:^|[:/_-])free(?:$|[:/_-])/i.test(id) }
+      })
+      .sort((left, right) => Number(right.free) - Number(left.free) || left.id.localeCompare(right.id))
   } finally {
     clearTimeout(timeout)
   }

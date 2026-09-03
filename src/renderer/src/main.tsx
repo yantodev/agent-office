@@ -308,10 +308,24 @@ function SettingsCenter({ project }: { project: Project | null }) {
   const [routerEnabled, setRouterEnabled] = useState(false)
   const [routerBaseUrl, setRouterBaseUrl] = useState('http://127.0.0.1:20128/v1')
   const [routerModel, setRouterModel] = useState('')
+  const [routerModels, setRouterModels] = useState<NineRouterModel[]>([])
   const [routerApiKey, setRouterApiKey] = useState('')
   const [routerNotice, setRouterNotice] = useState('')
   const [routerDraftLoaded, setRouterDraftLoaded] = useState(false)
+  const [toast, setToast] = useState<{ kind: 'success' | 'error'; message: string } | null>(null)
+  function showToast(kind: 'success' | 'error', message: string) {
+    setToast({ kind, message })
+    window.setTimeout(() => setToast(current => current?.message === message ? null : current), 4_000)
+  }
   const refresh = () => project ? window.office.listApprovals(project.id).then(setApprovals) : Promise.resolve()
+  async function loadRouterModels() {
+    try {
+      setRouterModels(await window.office.listNineRouterModels())
+    } catch (error) {
+      setRouterModels([])
+      setRouterNotice(errorMessage(error))
+    }
+  }
   async function refreshRouter(loadDraft = false) {
     try {
       const health = await window.office.nineRouterHealth()
@@ -322,6 +336,7 @@ function SettingsCenter({ project }: { project: Project | null }) {
         setRouterModel(health.model ?? '')
         setRouterDraftLoaded(true)
       }
+      if (loadDraft && health.enabled) await loadRouterModels()
     } catch (error) {
       setRouterNotice(errorMessage(error))
     }
@@ -356,14 +371,41 @@ function SettingsCenter({ project }: { project: Project | null }) {
     try {
       const health = await window.office.configureNineRouter({ enabled: routerEnabled, baseUrl: routerBaseUrl, model: routerModel, ...(routerApiKey.trim() ? { apiKey: routerApiKey.trim() } : {}) })
       setRouterHealth(health)
+      if (health.enabled) await loadRouterModels()
       setRouterApiKey('')
       setRouterNotice('9router configuration saved for this server. API key is hidden after saving.')
+      showToast('success', '9router configuration saved.')
     } catch (error) {
       setRouterNotice(errorMessage(error))
+      showToast('error', errorMessage(error))
+    }
+  }
+
+  async function testRouterConnection() {
+    setRouterNotice('Testing 9router connection…')
+    try {
+      const health = await window.office.nineRouterHealth()
+      setRouterHealth(health)
+      if (health.status === 'healthy') {
+        await loadRouterModels()
+        setRouterNotice(`Connected in ${health.latencyMs ?? 0} ms.`)
+        showToast('success', `9router connected (${health.latencyMs ?? 0} ms).`)
+      } else {
+        const message = health.error || `9router status: ${health.status}`
+        setRouterNotice(message)
+        showToast('error', message)
+      }
+    } catch (error) {
+      const message = errorMessage(error)
+      setRouterNotice(message)
+      showToast('error', message)
     }
   }
 
   const routerLabel = routerHealth?.status === 'healthy' ? 'Connected' : routerHealth?.status === 'disabled' ? 'Disabled' : routerHealth?.status ?? 'Checking'
+  const routerModelOptions = routerModels.some(model => model.id === routerModel) || !routerModel
+    ? routerModels
+    : [{ id: routerModel, free: false, ownedBy: undefined }, ...routerModels]
 
   return <section className="settings-center">
     <div className="command-header"><div><h2>Settings & safety</h2><p>{project ? 'Configure integrations and approve CLI configuration changes.' : 'Select a workspace first.'}</p></div></div>
@@ -372,15 +414,17 @@ function SettingsCenter({ project }: { project: Project | null }) {
       <div className="panel-title"><h3>9router gateway</h3><span className={`integration-status ${routerHealth?.status === 'healthy' ? 'ready' : ''}`}>{routerLabel}</span></div>
       <label className="checkbox-row"><input type="checkbox" checked={routerEnabled} onChange={event => setRouterEnabled(event.target.checked)} /> Enable 9router for new agent sessions</label>
       <label htmlFor="nine-router-url">Base URL</label><input id="nine-router-url" type="url" required value={routerBaseUrl} onChange={event => setRouterBaseUrl(event.target.value)} />
-      <label htmlFor="nine-router-model">Model route</label><input id="nine-router-model" placeholder="provider/model (optional)" value={routerModel} onChange={event => setRouterModel(event.target.value)} />
+      <label htmlFor="nine-router-model">Model route</label><select id="nine-router-model" value={routerModel} onChange={event => setRouterModel(event.target.value)}><option value="">Auto-select model (optional)</option>{routerModelOptions.map(model => <option key={model.id} value={model.id}>{model.id}{model.free ? ' · FREE' : ''}</option>)}</select>
       <label htmlFor="nine-router-key">API key</label><input id="nine-router-key" type="password" autoComplete="off" placeholder={routerHealth?.apiKeyConfigured ? 'Saved key (leave blank to keep)' : 'Paste 9router API key'} value={routerApiKey} onChange={event => setRouterApiKey(event.target.value)} />
       <small className="muted">Health: {routerHealth?.reachable ? `reachable in ${routerHealth.latencyMs ?? 0} ms` : 'not reachable'}{routerHealth?.errorCode ? ` · ${routerHealth.errorCode}` : ''}{routerHealth?.error ? ` · ${routerHealth.error}` : ''}. Key tidak ditampilkan kembali.</small>
-      <div className="profile-actions"><button className="save-profile" type="submit">Save gateway</button><button type="button" onClick={() => void refreshRouter(true)}>Test connection</button></div>
+      <div className="profile-actions"><button className="save-profile" type="submit">Save gateway</button><button type="button" onClick={() => void testRouterConnection()}>Test connection</button><button type="button" onClick={() => void loadRouterModels()} disabled={!routerEnabled}>Load models</button></div>
+      <small className="muted">{routerModels.length ? `${routerModels.length} model(s) loaded from /v1/models.` : 'No models loaded yet.'}</small>
       {routerNotice && <small className="muted">{routerNotice}</small>}
     </form>
     <form className="panel-card profile-form" onSubmit={prepare}><h3>CLI config change</h3><input aria-label="CLI config path" placeholder="Absolute CLI config path" required value={configPath} onChange={event => setConfigPath(event.target.value)} /><textarea aria-label="CLI config content" placeholder="Proposed complete file content" rows={14} required value={configContent} onChange={event => setConfigContent(event.target.value)} /><small className="muted">The current file is backed up before replacement. Secret values are redacted in the diff and event log.</small><button className="save-profile" type="submit" disabled={!project}>Preview & request approval</button>{diff && <pre className="config-diff">{diff}</pre>}{notice && <small className="muted">{notice}</small>}</form>
-      <div className="panel-card"><div className="panel-title"><h3>Config approvals</h3><span>{approvals.filter(approval => approval.type === 'config-change' && approval.status === 'pending').length} pending</span></div><div className="approval-list">{approvals.filter(approval => approval.type === 'config-change').map(approval => <div className="approval-row" key={approval.id}><strong>{approval.title}</strong><p>{approval.reason}</p>{approval.status === 'pending' && <div className="profile-actions"><button onClick={() => resolve(approval, 'approved')}>Approve</button><button onClick={() => resolve(approval, 'rejected')}>Reject</button></div>}{approval.status === 'approved' && <button onClick={() => apply(approval)}>Apply backed-up change</button>}</div>)}</div></div>
+    <div className="panel-card"><div className="panel-title"><h3>Config approvals</h3><span>{approvals.filter(approval => approval.type === 'config-change' && approval.status === 'pending').length} pending</span></div><div className="approval-list">{approvals.filter(approval => approval.type === 'config-change').map(approval => <div className="approval-row" key={approval.id}><strong>{approval.title}</strong><p>{approval.reason}</p>{approval.status === 'pending' && <div className="profile-actions"><button onClick={() => resolve(approval, 'approved')}>Approve</button><button onClick={() => resolve(approval, 'rejected')}>Reject</button></div>}{approval.status === 'approved' && <button onClick={() => apply(approval)}>Apply backed-up change</button>}</div>)}</div></div>
     </div>
+    {toast && <div className={`toast toast-${toast.kind}`} role="status" aria-live="polite">{toast.message}<button type="button" aria-label="Dismiss notification" onClick={() => setToast(null)}>×</button></div>}
   </section>
 }
 
@@ -396,9 +440,9 @@ function DashboardCenter({ project, agents, fleet, onSelect }: { project: Projec
 
 type ProfileDraft = { name: string; role: string; command: string; soul: string; permissions: typeof defaultPermissions }
 
-function AgentsCenter({ agents, profiles, active, profileDraft, editingProfileId, onSelect, onStart, onStop, onHire, onProfileDraftChange, onSaveProfile, onEditProfile, onRemoveProfile, onCancelProfile }: { agents: Agent[]; profiles: AgentProfile[]; active: Agent | null; profileDraft: ProfileDraft; editingProfileId: string | null; onSelect: (id: string) => void; onStart: (agent: Agent) => void; onStop: (agent: Agent) => void; onHire: (profile: AgentProfile) => void; onProfileDraftChange: (draft: ProfileDraft) => void; onSaveProfile: (event: React.FormEvent<HTMLFormElement>) => void; onEditProfile: (profile: AgentProfile) => void; onRemoveProfile: (profile: AgentProfile) => void; onCancelProfile: () => void }) {
+function AgentsCenter({ agents, profiles, active, profileDraft, editingProfileId, routerHealth, onSelect, onStart, onStop, onHire, onProfileDraftChange, onSaveProfile, onEditProfile, onRemoveProfile, onCancelProfile }: { agents: Agent[]; profiles: AgentProfile[]; active: Agent | null; profileDraft: ProfileDraft; editingProfileId: string | null; routerHealth: NineRouterHealth | null; onSelect: (id: string) => void; onStart: (agent: Agent) => void; onStop: (agent: Agent) => void; onHire: (profile: AgentProfile) => void; onProfileDraftChange: (draft: ProfileDraft) => void; onSaveProfile: (event: React.FormEvent<HTMLFormElement>) => void; onEditProfile: (profile: AgentProfile) => void; onRemoveProfile: (profile: AgentProfile) => void; onCancelProfile: () => void }) {
   return <section className="agents-center">
-    <div className="command-header"><div><h2>Agents / Fleet</h2><p>Kelola worker, profile, session, dan terminal setiap agent.</p></div><span className="task-count">{agents.length} workers</span></div>
+    <div className="command-header"><div><h2>Agents / Fleet</h2><p>Kelola worker, profile, session, dan terminal setiap agent.</p></div><div className="fleet-header-status"><span className="task-count">{agents.length} workers</span><span className={`integration-status ${routerHealth?.status === 'healthy' ? 'ready' : ''}`}>9router: {routerHealth?.status ?? 'checking'}</span></div></div>
     <div className="agent-fleet-grid">{agents.length === 0 ? <div className="panel-card empty-panel"><h3>Belum ada agent aktif</h3><p>Hire agent dari profile di bawah untuk mengisi fleet.</p></div> : agents.map(agent => <article className={`panel-card fleet-agent ${active?.id === agent.id ? 'selected' : ''}`} key={agent.id} onClick={() => onSelect(agent.id)}><div className={`fleet-avatar ${agent.status}`}><span>{agent.name.slice(0, 1).toUpperCase()}</span></div><div className="fleet-agent-copy"><strong>{agent.name}</strong><span>{agent.role}</span><small>{agent.command} · {agent.status}</small></div><div className="fleet-agent-actions">{agent.status === 'working' ? <button className="danger" onClick={event => { event.stopPropagation(); onStop(agent) }}>Stop</button> : <button className="run" onClick={event => { event.stopPropagation(); onStart(agent) }}>Start</button>}<button onClick={event => { event.stopPropagation(); onSelect(agent.id) }}>Inspect</button></div></article>)}</div>
     <div className="agent-provisioning"><div className="panel-card"><div className="panel-title"><h3>Hire from profile</h3><span>{profiles.length} available</span></div><div className="hire-grid">{profiles.map(profile => <div className="profile-card" key={profile.id}><button className="profile-hire" onClick={() => onHire(profile)}><b>{profile.name.slice(0, 1)}</b><span>{profile.name}</span><small>{profile.command}</small></button><div className="profile-actions"><button type="button" onClick={() => onEditProfile(profile)}>Edit</button>{!profile.builtIn && <button type="button" onClick={() => onRemoveProfile(profile)}>Delete</button>}</div></div>)}</div></div><div className="panel-card"><div className="panel-title"><h3>{editingProfileId ? 'Edit profile' : 'New profile'}</h3>{editingProfileId && <button className="link-button" type="button" onClick={onCancelProfile}>Cancel</button>}</div><form className="profile-form" onSubmit={onSaveProfile}><input aria-label="Profile name" placeholder="Profile name" value={profileDraft.name} onChange={event => onProfileDraftChange({ ...profileDraft, name: event.target.value })} /><input aria-label="Profile role" placeholder="Role" value={profileDraft.role} onChange={event => onProfileDraftChange({ ...profileDraft, role: event.target.value })} /><input aria-label="CLI command" placeholder="CLI command" value={profileDraft.command} onChange={event => onProfileDraftChange({ ...profileDraft, command: event.target.value })} /><textarea aria-label="SOUL instructions" placeholder="SOUL / system instructions" rows={5} value={profileDraft.soul} onChange={event => onProfileDraftChange({ ...profileDraft, soul: event.target.value })} /><div className="permission-grid">{Object.entries(profileDraft.permissions).map(([permission, enabled]) => <label key={permission}><input type="checkbox" checked={enabled} onChange={event => onProfileDraftChange({ ...profileDraft, permissions: { ...profileDraft.permissions, [permission]: event.target.checked } })} /> {permission}</label>)}</div><button className="save-profile" type="submit">{editingProfileId ? 'Save changes' : 'Create profile'}</button></form></div></div>
     {active && <div className="panel-card fleet-terminal"><div className="panel-title"><h3>{active.name} terminal</h3><span>{active.status}</span></div><TerminalPanel agent={active} /></div>}
@@ -503,6 +547,7 @@ export function App() {
   const [commitLocked, setCommitLocked] = useState(false)
   const [view, setView] = useState<AppView>('dashboard')
   const [rendererError, setRendererError] = useState('')
+  const [routerHealth, setRouterHealth] = useState<NineRouterHealth | null>(null)
 
   useEffect(() => {
     const onUnhandledRejection = (event: PromiseRejectionEvent) => {
@@ -521,17 +566,19 @@ export function App() {
   }, [])
 
   const refresh = async () => {
-    const [nextAgents, nextProfiles, nextProjects, nextActiveProject] = await Promise.all([
+    const [nextAgents, nextProfiles, nextProjects, nextActiveProject, nextRouterHealth] = await Promise.all([
       window.office.listAgents(),
       window.office.listProfiles(),
       window.office.listProjects(),
-      window.office.activeProject()
+      window.office.activeProject(),
+      window.office.nineRouterHealth()
     ])
     setAgents(current => agentsChanged(current, nextAgents) ? nextAgents : current)
     setProfiles(nextProfiles)
     setProjects(nextProjects)
     setActiveProject(nextActiveProject)
     setFleet(await window.office.fleetSummary(nextActiveProject?.id))
+    setRouterHealth(nextRouterHealth)
   }
 
   useVisiblePolling(refresh, 8000, [])
@@ -692,7 +739,7 @@ export function App() {
 
       {rendererError && <div className="renderer-feedback" role="alert"><span>{rendererError}</span><button type="button" onClick={() => setRendererError('')}>Dismiss</button></div>}
 
-      {view === 'dashboard' ? <DashboardCenter project={activeProject} agents={agents} fleet={fleet} onSelect={id => { setActiveId(id); setCommitLocked(false) }} /> : view === 'agents' ? <AgentsCenter agents={agents} profiles={profiles} active={active} profileDraft={profileDraft} editingProfileId={editingProfileId} onSelect={id => { setActiveId(id); setCommitLocked(false) }} onStart={start} onStop={stop} onHire={addAgent} onProfileDraftChange={setProfileDraft} onSaveProfile={saveProfile} onEditProfile={editProfile} onRemoveProfile={removeProfile} onCancelProfile={() => { setEditingProfileId(null); setProfileDraft(emptyProfile) }} /> : view === 'workspaces' ? <WorkspacesCenter projects={projects} activeProject={activeProject} projectDraft={projectDraft} onDraftChange={setProjectDraft} onCreate={createProject} onSelect={selectProject} onUpdate={updateWorkspace} onRemove={deleteWorkspace} /> : view === 'inbox' ? <InboxCenter project={activeProject} agents={agents} /> : view === 'github' ? <GithubCenter project={activeProject} /> : view === 'command' ? <CommandCenter project={activeProject} agents={agents} /> : view === 'memory' ? <MemoryCenter project={activeProject} agents={agents} /> : view === 'settings' ? <SettingsCenter project={activeProject} /> : <div className="floor-view"><section className="workspace">
+      {view === 'dashboard' ? <DashboardCenter project={activeProject} agents={agents} fleet={fleet} onSelect={id => { setActiveId(id); setCommitLocked(false) }} /> : view === 'agents' ? <AgentsCenter agents={agents} profiles={profiles} active={active} profileDraft={profileDraft} editingProfileId={editingProfileId} routerHealth={routerHealth} onSelect={id => { setActiveId(id); setCommitLocked(false) }} onStart={start} onStop={stop} onHire={addAgent} onProfileDraftChange={setProfileDraft} onSaveProfile={saveProfile} onEditProfile={editProfile} onRemoveProfile={removeProfile} onCancelProfile={() => { setEditingProfileId(null); setProfileDraft(emptyProfile) }} /> : view === 'workspaces' ? <WorkspacesCenter projects={projects} activeProject={activeProject} projectDraft={projectDraft} onDraftChange={setProjectDraft} onCreate={createProject} onSelect={selectProject} onUpdate={updateWorkspace} onRemove={deleteWorkspace} /> : view === 'inbox' ? <InboxCenter project={activeProject} agents={agents} /> : view === 'github' ? <GithubCenter project={activeProject} /> : view === 'command' ? <CommandCenter project={activeProject} agents={agents} /> : view === 'memory' ? <MemoryCenter project={activeProject} agents={agents} /> : view === 'settings' ? <SettingsCenter project={activeProject} /> : <div className="floor-view"><section className="workspace">
         <div className="floor-card">
           {agents.length === 0 ? <div className="floor-grid"><div className="empty-state"><h2>Your office is empty</h2><p>Add an agent from a profile to create the first worker.</p></div></div> : <OfficeFloor agents={agents} projectId={activeProject?.id} onSelect={id => { setActiveId(id); setCommitLocked(false) }} />}
           {/* CSS floor remains the empty state so the app stays useful before the first agent is hired. */}

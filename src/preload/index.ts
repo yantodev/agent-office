@@ -26,6 +26,7 @@ contextBridge.exposeInMainWorld('office', {
   fleetSummary: (projectId?: string) => ipcRenderer.invoke('fleet:summary', projectId),
   githubStatus: (projectId?: string) => ipcRenderer.invoke('github:status', projectId),
   nineRouterHealth: () => ipcRenderer.invoke('nine-router:health'),
+  listNineRouterModels: () => ipcRenderer.invoke('nine-router:models'),
   configureNineRouter: (config: unknown) => ipcRenderer.invoke('nine-router:configure', config),
   importGithubIssues: (projectId?: string) => ipcRenderer.invoke('github:import-issues', projectId),
   prepareGithubPr: (input: unknown) => ipcRenderer.invoke('github:prepare-pr', input),

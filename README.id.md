@@ -161,7 +161,7 @@ npm run web:build
 npm run web:server
 ```
 
-Script web otomatis memeriksa native module dan melakukan rebuild untuk runtime Node yang sedang aktif jika diperlukan. Rebuild pertama dapat memerlukan beberapa menit pada Node 20 karena prebuilt binary mungkin tidak tersedia; pasang build tools native di atas. Jika kembali menggunakan Electron setelah menjalankan script browser, jalankan `npm run electron:rebuild`, karena Electron dan Node menggunakan ABI native module yang berbeda.
+Script web otomatis memeriksa native module dan melakukan rebuild untuk runtime Node yang sedang aktif jika diperlukan. Rebuild pertama dapat memerlukan beberapa menit pada Node 20 karena prebuilt binary mungkin tidak tersedia; pasang build tools native di atas. `npm run dev` kini otomatis menjalankan hook rebuild Electron sebelum aplikasi dimulai, sehingga perpindahan dari script browser tidak meninggalkan native module dengan ABI Node.
 
 Server standalone mendengarkan `127.0.0.1:8787` secara default. Restart web process setelah mengubah `.env` karena token dibaca saat startup. Gunakan `AGENT_OFFICE_WEB_HOST=0.0.0.0` hanya jika server dilindungi HTTPS/WSS melalui reverse proxy. `AGENT_OFFICE_WEB_DATA` memilih directory data SQLite. Image Docker production tersedia melalui `docker build -f Dockerfile.web -t agent-office-web .`; gunakan token kuat dan volume `/data` yang persistent.
 

@@ -7,7 +7,7 @@ import test from 'node:test'
 const { assertTaskTransition, isTaskStatus, resolveTaskReadiness } = await import('../src/main/task-lifecycle.ts')
 const { executionPlan } = await import('../src/main/permission-policy.ts')
 const { providerAdapter } = await import('../src/main/provider-adapters.ts')
-const { readNineRouterConfig, injectNineRouterEnvironment, filterSensitiveEnvironment, checkNineRouter } = await import('../src/main/nine-router.ts')
+const { readNineRouterConfig, injectNineRouterEnvironment, filterSensitiveEnvironment, checkNineRouter, listNineRouterModels } = await import('../src/main/nine-router.ts')
 const { canonicalPath, isCanonicalPathInside, redactSecrets } = await import('../src/main/security.ts')
 const { writeJsonAtomic } = await import('../src/main/persistence.ts')
 const { summarizeExecutionUsage } = await import('../src/main/telemetry.ts')
@@ -134,6 +134,12 @@ test('9router health check reports safe connection states without exposing the A
   assert.equal(routing.errorCode, 'routing')
   const timeout = await checkNineRouter({ AGENT_OFFICE_9ROUTER_ENABLED: '1' }, async () => { const error = new Error('request aborted'); error.name = 'AbortError'; throw error })
   assert.equal(timeout.errorCode, 'timeout')
+
+  const models = await listNineRouterModels({ AGENT_OFFICE_9ROUTER_ENABLED: '1' }, async () => new Response(JSON.stringify({ data: [{ id: 'provider/paid-model', owned_by: 'provider' }, { id: 'openrouter/demo:free', owned_by: 'openrouter' }] }), { status: 200 }))
+  assert.deepEqual(models, [
+    { id: 'openrouter/demo:free', ownedBy: 'openrouter', free: true },
+    { id: 'provider/paid-model', ownedBy: 'provider', free: false },
+  ])
 })
 
 test('atomic persistence leaves valid JSON after concurrent writes', async () => {

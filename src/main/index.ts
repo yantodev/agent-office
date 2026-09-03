@@ -18,7 +18,7 @@ import { interruptAgent, spawnAgentSession, submitAgentPrompt } from './agent-se
 import { summarizeExecutionUsage } from './telemetry'
 import { githubCli } from './github'
 import { appendTerminalOutput, clearAllTerminalOutputs, clearTerminalOutput, readTerminalOutput } from './terminal-buffer-store'
-import { checkNineRouter, mergeNineRouterEnvironment, type NineRouterSettingsInput } from './nine-router'
+import { checkNineRouter, listNineRouterModels, mergeNineRouterEnvironment, type NineRouterSettingsInput } from './nine-router'
 
 type AgentStatus = 'idle' | 'working' | 'paused' | 'error' | 'offline'
 
@@ -843,6 +843,7 @@ function registerIpc() {
   })
 
   ipcMain.handle('nine-router:health', () => checkNineRouter(nineRouterEnvironment()))
+  ipcMain.handle('nine-router:models', () => listNineRouterModels(nineRouterEnvironment()))
   ipcMain.handle('nine-router:configure', (_event, input: NineRouterSettingsInput) => {
     if (!input || typeof input.enabled !== 'boolean' || typeof input.baseUrl !== 'string') throw new Error('Invalid 9router configuration')
     const merged = mergeNineRouterEnvironment(nineRouterEnvironment(), input)

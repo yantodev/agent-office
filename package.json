@@ -11,6 +11,7 @@
   },
   "scripts": {
     "dev": "electron-vite dev",
+    "predev": "npm run electron:rebuild",
     "build": "electron-vite build",
     "typecheck": "tsc --noEmit",
     "smoke:unit": "tsx scripts/unit-smoke.mjs",
