@@ -85,6 +85,8 @@ jobs:
       - run: npm run smoke:web
       - run: npm run smoke:github
       - run: npm run build
+      - name: Rebuild native modules for the Electron runtime
+        run: npm run electron:rebuild
       - run: npm run smoke:native
       - run: npm run smoke:main
       - run: npm run smoke:migration
