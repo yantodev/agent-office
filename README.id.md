@@ -162,6 +162,7 @@ Server standalone mendengarkan `127.0.0.1:8787` secara default. Restart web proc
 | --- | --- |
 | `npm run dev` | Menjalankan environment development Electron |
 | `npm run typecheck` | Menjalankan TypeScript compiler tanpa membuat file output |
+| `npm run smoke:9router` | Memeriksa gateway 9router yang sedang berjalan (skip jika integrasi nonaktif) |
 | `npm run build` | Membuild bundle main, preload, dan renderer |
 | `npm run web:server` | Menjalankan authenticated web API standalone |
 | `npm run web:dev` | Menjalankan web API dan browser client dengan proxy API/WebSocket Vite |

@@ -173,6 +173,7 @@ proxy. `AGENT_OFFICE_WEB_DATA` selects the SQLite data directory. A production D
 | `npm run dev`                | Start the Electron development environment                             |
 | `npm run typecheck`          | Run the TypeScript compiler without emitting files                     |
 | `npm run smoke:unit`         | Run isolated security, lifecycle, policy, and atomic persistence tests |
+| `npm run smoke:9router`      | Check a running 9router gateway (skips when integration is disabled) |
 | `npm run smoke:web`          | Verify authenticated web API endpoints and storage transport           |
 | `npm run build`              | Build the main, preload, and renderer bundles                          |
 | `npm run web:server`         | Start the standalone authenticated web API                             |

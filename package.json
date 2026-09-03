@@ -14,6 +14,7 @@
     "build": "electron-vite build",
     "typecheck": "tsc --noEmit",
     "smoke:unit": "tsx scripts/unit-smoke.mjs",
+    "smoke:9router": "tsx scripts/nine-router-smoke.mjs",
     "smoke:web": "tsx scripts/web-smoke.mjs",
     "smoke:web:dev": "node scripts/web-dev-smoke.mjs",
     "smoke:github": "node scripts/github-cli-smoke.cjs",
