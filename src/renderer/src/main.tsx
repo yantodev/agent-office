@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { TerminalPanel } from './components/TerminalPanel'
 import { OfficeFloor } from './components/OfficeFloor'
+import { appendTerminalBuffer, clearTerminalBuffer } from './terminal-buffer'
 import logoLandscapeUrl from '../../../assets/logo/logo-landscape.png?url'
 import './styles/app.css'
 
@@ -490,9 +491,10 @@ export function App() {
 
   useEffect(() => {
     void window.office.detectCli().then(setClis)
-    const offExit = window.office.onAgentExit(() => refresh())
+    const offTerminalData = window.office.onTerminalData(({ id, data }) => appendTerminalBuffer(id, data))
+    const offExit = window.office.onAgentExit(({ id }) => { clearTerminalBuffer(id); void refresh() })
     const offState = window.office.onAgentState(() => refresh())
-    return () => { offExit(); offState() }
+    return () => { offTerminalData(); offExit(); offState() }
   }, [])
 
   async function addAgent(profile: AgentProfile) {

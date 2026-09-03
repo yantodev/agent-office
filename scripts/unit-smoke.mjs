@@ -10,6 +10,7 @@ const { providerAdapter } = await import('../src/main/provider-adapters.ts')
 const { canonicalPath, isCanonicalPathInside, redactSecrets } = await import('../src/main/security.ts')
 const { writeJsonAtomic } = await import('../src/main/persistence.ts')
 const { summarizeExecutionUsage } = await import('../src/main/telemetry.ts')
+const { appendTerminalBuffer, clearTerminalBuffer, getTerminalBuffer, hasTerminalBuffer, subscribeTerminalBuffer } = await import('../src/renderer/src/terminal-buffer.ts')
 
 test('task lifecycle rejects invalid transitions and resolves readiness', () => {
   assert.equal(isTaskStatus('review'), true)
@@ -77,4 +78,18 @@ test('atomic persistence leaves valid JSON after concurrent writes', async () =>
 
 test('telemetry aggregation only reports local execution usage', () => {
   assert.deepEqual(summarizeExecutionUsage([{ durationMs: 120, outputBytes: 10 }, { durationMs: null, outputBytes: 5 }]), { durationMs: 120, outputBytes: 15 })
+})
+
+test('terminal buffer survives panel unmount and clears when the session exits', () => {
+  const id = 'terminal-buffer-smoke'
+  clearTerminalBuffer(id)
+  const unsubscribe = subscribeTerminalBuffer(() => undefined)
+  appendTerminalBuffer(id, 'first output')
+  unsubscribe()
+  appendTerminalBuffer(id, ' while navigating')
+  assert.equal(hasTerminalBuffer(id), true)
+  assert.match(getTerminalBuffer(id), /first output while navigating/)
+  clearTerminalBuffer(id)
+  assert.equal(hasTerminalBuffer(id), false)
+  assert.equal(getTerminalBuffer(id), '')
 })

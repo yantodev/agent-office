@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
+import { getTerminalBuffer, hasTerminalBuffer, subscribeTerminalBuffer } from '../terminal-buffer'
 
 export function TerminalPanel({ agent }: { agent: Agent | null }) {
   const host = useRef<HTMLDivElement>(null)
@@ -23,15 +24,25 @@ export function TerminalPanel({ agent }: { agent: Agent | null }) {
     t.onData(data => activeId.current && window.office.writeTerminal(activeId.current, data))
     const onResize = () => { f.fit(); if(activeId.current) window.office.resizeTerminal(activeId.current, t.cols, t.rows) }
     window.addEventListener('resize', onResize)
-    const off = window.office.onTerminalData(({id,data}) => { if(id===activeId.current) t.write(data) })
-    return () => { off(); window.removeEventListener('resize', onResize); t.dispose() }
+    const offBuffer = subscribeTerminalBuffer(update => {
+      if (update.id !== activeId.current || !terminal.current) return
+      if (update.cleared) {
+        terminal.current.clear()
+        terminal.current.writeln('\x1b[90mTerminal session ended. Start a new session to continue.\x1b[0m')
+      } else if (update.data) {
+        terminal.current.write(update.data)
+      }
+    })
+    return () => { offBuffer(); window.removeEventListener('resize', onResize); t.dispose() }
   }, [])
 
   useEffect(() => {
     activeId.current = agent?.id ?? null
     if (terminal.current) {
       terminal.current.clear()
-      terminal.current.writeln(agent ? `\x1b[32mSelected ${agent.name}. Click Start session.\x1b[0m` : '\x1b[90mSelect an agent to attach.\x1b[0m')
+      if (!agent) terminal.current.writeln('\x1b[90mSelect an agent to attach.\x1b[0m')
+      else if (hasTerminalBuffer(agent.id)) terminal.current.write(getTerminalBuffer(agent.id))
+      else terminal.current.writeln(`\x1b[32mSelected ${agent.name}. Click Start session.\x1b[0m`)
       setTimeout(() => fit.current?.fit(), 50)
     }
   }, [agent?.id])
