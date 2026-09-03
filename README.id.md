@@ -174,6 +174,10 @@ Artifact build dibuat di `dist/` dan sengaja diabaikan oleh Git.
 
 Kontribusi sangat terbuka. Untuk mengusulkan perubahan:
 
+### Melaporkan issue
+
+Karena repository ini sudah public, silakan buat [GitHub Issue](https://github.com/yantodev/agent-office/issues/new) jika menemukan bug, behavior yang tidak sesuai, atau memiliki usulan fitur. Sebelum mengirim laporan, cari issue yang sudah ada dan sertakan behavior yang diharapkan, behavior aktual, langkah reproduksi, detail environment, serta log atau screenshot yang relevan. Hapus token, credential, dan data sensitif dari semua laporan.
+
 1. Fork repository dan buat branch yang fokus pada satu perubahan.
 2. Jaga scope perubahan tetap jelas dan perbarui dokumentasi jika behavior berubah.
 3. Jalankan typecheck, smoke test, dan build seperti yang tercantum di atas.

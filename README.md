@@ -181,6 +181,10 @@ To back up a workspace safely, close Agent Office first, then copy the user-data
 
 Contributions are welcome. To propose a change:
 
+### Reporting an issue
+
+Because this repository is public, please create a [GitHub Issue](https://github.com/yantodev/agent-office/issues/new) when you find a bug, unexpected behavior, or have a feature request. Before submitting, search existing issues and include the expected behavior, actual behavior, reproduction steps, environment details, and relevant logs or screenshots. Remove tokens, credentials, and other sensitive data from all reports.
+
 1. Fork the repository and create a focused branch.
 2. Keep changes scoped and update documentation when behavior changes.
 3. Run the typecheck, smoke tests, and build commands listed above.
