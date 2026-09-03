@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.0.0 — 2026-09-01
+## 0.0.1-beta — 2026-09-01
 
 - Memutakhirkan Electron ke `41.10.3` dan `better-sqlite3` ke `13.0.3`; native ABI rebuild serta `npm audit` kini bersih.
 - Memperkuat migrasi database legacy, fallback project aktif, crash recovery, serta smoke test mailbox retry/dead-letter dan secret redaction.

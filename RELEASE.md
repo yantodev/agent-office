@@ -2,7 +2,7 @@
 
 ## Sebelum release
 
-- [x] Naikkan `version` ke `1.0.0` di `package.json` dan catat perubahan pada release notes.
+- [x] Naikkan `version` ke `0.0.1-beta` di `package.json` dan catat perubahan pada release notes.
 - [x] Jalankan `npm ci` pada environment bersih.
 - [x] Jalankan `npm run typecheck`, `npm run smoke:native`, `npm run smoke:main`, dan `npm run build`.
 - [x] Rebuild native modules dengan `electron-builder install-app-deps`.
@@ -23,15 +23,15 @@
 The release workflow is defined in `.github/workflows/release.yml`. Create and push a semver tag matching `package.json`, for example:
 
 ```bash
-git tag v1.0.0
-git push origin v1.0.0
+git tag v0.0.1-beta
+git push origin v0.0.1-beta
 ```
 
 The workflow runs the Linux validation gate, builds the Linux AppImage on a runner labeled `self-hosted` plus `linux`, uploads the artifact, and creates the GitHub Release with generated notes. Packaging entries for Windows and macOS remain commented in the workflow until native runners are available. A manual run is also available from **Actions → Agent Office Release** by providing an existing version tag.
 
 CI menjalankan `smoke:native`, `smoke:main`, dan `smoke:migration` pada Linux serta packaging AppImage. Workflow memiliki timeout, permission minimal, dan artifact wajib (`if-no-files-found: error`); workflow bisa dipicu melalui `workflow_dispatch` untuk review release.
 
-Verifikasi lokal terakhir: 2026-09-03, Linux x64. `npm run dist:linux` berhasil menghasilkan `dist/Agent Office-1.0.0.AppImage` setelah rebuild `better-sqlite3` dan `node-pty`. Production dan full dependency audit bersih (`npm audit` dan `npm audit --omit=dev`).
+Verifikasi lokal terakhir: 2026-09-03, Linux x64. `npm run dist:linux` berhasil menghasilkan `dist/Agent Office-0.0.1-beta.AppImage` setelah rebuild `better-sqlite3` dan `node-pty`. Production dan full dependency audit bersih (`npm audit` dan `npm audit --omit=dev`).
 
 ## Catatan environment
 

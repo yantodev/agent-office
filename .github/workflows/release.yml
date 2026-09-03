@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag semver yang sudah ada, contoh v1.0.0'
+        description: 'Tag semver yang sudah ada, contoh v0.0.1-beta'
         required: true
         type: string
 
