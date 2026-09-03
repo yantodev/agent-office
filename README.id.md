@@ -2,6 +2,10 @@
 
 Workspace desktop local-first untuk menjalankan, mengoordinasikan, dan memantau banyak coding agent dalam pixel-art office yang interaktif.
 
+[![CI](https://github.com/yantodev/agent-office/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/yantodev/agent-office/actions/workflows/ci.yml) [![Lisensi: MIT](https://img.shields.io/badge/Lisensi-MIT-yellow.svg)](LICENSE)
+[![Electron](https://img.shields.io/badge/Electron-41-47848F?logo=electron&logoColor=white)](https://www.electronjs.org/) [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=20232A)](https://react.dev/) [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![PixiJS](https://img.shields.io/badge/PixiJS-8-EA4C89?logo=pixijs&logoColor=white)](https://pixijs.com/) [![Vite](https://img.shields.io/badge/Vite-6-646CFF?logo=vite&logoColor=white)](https://vite.dev/) [![SQLite](https://img.shields.io/badge/SQLite-better--sqlite3-003B57?logo=sqlite&logoColor=white)](https://www.sqlite.org/) [![node-pty](https://img.shields.io/badge/node--pty-1.0-339933?logo=node.js&logoColor=white)](https://github.com/microsoft/node-pty)
+
 [English documentation](README.md)
 
 ## Ringkasan
@@ -187,7 +191,7 @@ Jangan menaruh API key, GitHub PAT, atau credential lain di source code, issue, 
 
 ## Lisensi
 
-Belum ada file lisensi yang dipublikasikan. Sebelum lisensi ditambahkan, seluruh hak tetap berada pada pemilik repository.
+Project ini menggunakan MIT License. Lihat [LICENSE](LICENSE) untuk teks lisensi lengkap.
 
 ## Referensi project
 
