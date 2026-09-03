@@ -20,7 +20,7 @@
     "web:server": "node --env-file-if-exists=.env scripts/ensure-web-native.mjs && node --env-file-if-exists=.env node_modules/tsx/dist/cli.mjs src/web/main.ts",
     "web:dev": "node --env-file-if-exists=.env scripts/web-dev.mjs",
     "web:rebuild-native": "npm rebuild better-sqlite3 node-pty --foreground-scripts",
-    "electron:rebuild": "electron-builder install-app-deps",
+    "electron:rebuild": "electron-rebuild --force --only better-sqlite3,node-pty",
     "web:build": "vite build --config vite.config.web.ts",
     "web:preview": "vite preview --config vite.config.web.ts",
     "smoke:native": "node scripts/native-smoke.cjs",
