@@ -78,6 +78,8 @@ jobs:
           if (Test-Path $ghPath) { $ghPath | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append }
 
       - run: npm ci
+      - name: Rebuild native modules for the CI Node runtime
+        run: npm run web:rebuild-native
       - run: npm run typecheck
       - run: npm run smoke:unit
       - run: npm run smoke:web

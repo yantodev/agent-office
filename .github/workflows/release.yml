@@ -46,6 +46,8 @@ jobs:
         run: sudo apt-get update && sudo apt-get install --yes build-essential python3 gh libgtk-3-0t64 libnss3 libasound2t64 libgbm1 libxss1 xvfb
 
       - run: npm ci
+      - name: Rebuild native modules for the release validation Node runtime
+        run: npm run web:rebuild-native
       - run: npm run typecheck
       - run: npm run smoke:unit
       - run: npm run smoke:web
