@@ -162,6 +162,7 @@ proxy. `AGENT_OFFICE_WEB_DATA` selects the SQLite data directory. A production D
 | `npm run dist:linux`         | Build a Linux AppImage                                                 |
 | `npm run dist:win`           | Build a Windows NSIS installer                                         |
 | `npm run dist:mac`           | Build a macOS DMG                                                      |
+| `npm run release:version`    | Prepare a SemVer release commit and annotated tag                      |
 
 Before opening a pull request, run:
 
@@ -193,6 +194,22 @@ The configured application identifier is `com.agentoffice.desktop`. The default 
 `assets/logo/logo.png`, while the landscape logo used by the sidebar is stored in `assets/logo/logo-landscape.png`.
 
 Build artifacts are generated in `dist/` and are intentionally ignored by Git.
+
+### Release versioning
+
+Use the release script to update the package version, create the release commit, and create an annotated tag. It accepts stable SemVer and prerelease versions such as `0.0.2-beta` or `0.0.2-rc.1`:
+
+```bash
+npm run release:version -- 0.0.2-beta
+```
+
+Review the generated commit before pushing. To push the current branch and tag and trigger the release workflow, add `--push`:
+
+```bash
+npm run release:version -- 0.0.2-beta --push
+```
+
+The tag must match the version in `package.json` exactly: `0.0.2-beta` becomes `v0.0.2-beta`.
 
 ## Local data, telemetry, and backup
 

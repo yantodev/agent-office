@@ -30,6 +30,7 @@
     "dist:linux": "npm run build && electron-builder --linux AppImage",
     "dist:win": "npm run build && electron-builder --win nsis",
     "dist:mac": "npm run build && electron-builder --mac dmg",
+    "release:version": "bash scripts/release-version.sh",
     "postinstall": "npm run electron:rebuild"
   },
   "build": {

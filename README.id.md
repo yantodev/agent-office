@@ -151,6 +151,7 @@ Server standalone mendengarkan `127.0.0.1:8787` secara default. Restart web proc
 | `npm run dist:linux` | Membuat Linux AppImage |
 | `npm run dist:win` | Membuat installer Windows NSIS |
 | `npm run dist:mac` | Membuat macOS DMG |
+| `npm run release:version` | Menyiapkan commit dan annotated tag untuk release SemVer |
 
 Sebelum membuat pull request, jalankan:
 
@@ -178,6 +179,22 @@ Setelah itu jalankan aplikasi sebagai user biasa. Pada environment CI headless, 
 Application identifier yang digunakan adalah `com.agentoffice.desktop`. Icon Electron default dimuat dari `assets/logo/logo.png`, sedangkan logo landscape untuk sidebar berada di `assets/logo/logo-landscape.png`.
 
 Artifact build dibuat di `dist/` dan sengaja diabaikan oleh Git.
+
+### Versioning release
+
+Gunakan script release untuk memperbarui versi package, membuat commit release, dan membuat annotated tag. Script menerima versi SemVer stabil maupun prerelease seperti `0.0.2-beta` atau `0.0.2-rc.1`:
+
+```bash
+npm run release:version -- 0.0.2-beta
+```
+
+Review commit yang dibuat sebelum melakukan push. Untuk melakukan push branch aktif dan tag sekaligus memicu release workflow, tambahkan `--push`:
+
+```bash
+npm run release:version -- 0.0.2-beta --push
+```
+
+Tag harus sama persis dengan versi di `package.json`: versi `0.0.2-beta` menjadi tag `v0.0.2-beta`.
 
 ## Kontribusi
 
