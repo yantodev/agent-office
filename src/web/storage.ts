@@ -1,11 +1,13 @@
 import Database from 'better-sqlite3'
 import { basename, isAbsolute, join } from 'node:path'
+import { existsSync, statSync } from 'node:fs'
 import { redactSecrets } from '../main/security.ts'
 
 export type WebStorage = {
   listProjects: () => unknown[]
   activeProject: () => unknown | null
   createProject: (input: { id: string; name?: string; path: string; useWorktrees?: boolean }) => unknown
+  updateProject: (input: { id: string; name?: string; path: string; useWorktrees?: boolean }) => unknown | null
   setActiveProject: (id: string) => unknown | null
   removeProject: (id: string) => boolean
   listTasks: (projectId: string) => unknown[]
@@ -64,8 +66,21 @@ export function createSqliteStorage(db: Database.Database): WebStorage {
     },
     createProject: input => {
       if (!input.id || !input.path || !isAbsolute(input.path)) throw new Error('Project path must be absolute')
+      if (!existsSync(input.path) || !statSync(input.path).isDirectory()) throw new Error(`Workspace path does not exist or is not a directory: ${input.path}`)
       const name = input.name?.trim() || basename(input.path)
       db.prepare('INSERT INTO projects (id, name, path, use_worktrees) VALUES (?, ?, ?, ?)').run(input.id, name, input.path, input.useWorktrees ? 1 : 0)
+      return project(input.id)
+    },
+    updateProject: input => {
+      const current = project(input.id) as { id: string; path: string } | null
+      if (!current) return null
+      if (!input.path || !isAbsolute(input.path)) throw new Error('Project path must be absolute')
+      if (!existsSync(input.path) || !statSync(input.path).isDirectory()) throw new Error(`Workspace path does not exist or is not a directory: ${input.path}`)
+      const agents = db.prepare('SELECT cwd FROM agents WHERE project_id=?').all(input.id) as Array<{ cwd: string }>
+      db.transaction(() => {
+        db.prepare('UPDATE projects SET name=?, path=?, use_worktrees=? WHERE id=?').run(input.name?.trim() || basename(input.path), input.path, input.useWorktrees ? 1 : 0, input.id)
+        for (const agent of agents) if (agent.cwd === current.path || agent.cwd === '.') db.prepare('UPDATE agents SET cwd=? WHERE project_id=? AND cwd=?').run(input.path, input.id, agent.cwd)
+      })()
       return project(input.id)
     },
     setActiveProject: id => {
@@ -73,7 +88,10 @@ export function createSqliteStorage(db: Database.Database): WebStorage {
       db.prepare("INSERT INTO settings (key, value) VALUES ('active_project', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").run(id)
       return project(id)
     },
-    removeProject: id => db.prepare('DELETE FROM projects WHERE id=?').run(id).changes > 0,
+    removeProject: id => {
+      if (db.prepare('SELECT 1 FROM agents WHERE project_id=? LIMIT 1').get(id)) return false
+      return db.prepare('DELETE FROM projects WHERE id=?').run(id).changes > 0
+    },
     listTasks: projectId => {
       const tasks = db.prepare(`SELECT id, project_id AS projectId, title, prompt, status, agent_id AS agentId,
         result, error, mission_id AS missionId, approval_status AS approvalStatus, review_status AS reviewStatus,

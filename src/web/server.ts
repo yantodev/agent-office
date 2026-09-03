@@ -184,7 +184,11 @@ export function createWebServer(options: WebServerOptions) {
       if (url.pathname === '/v1/active-project' && request.method === 'GET') return json(response, 200, options.storage.activeProject())
       if (url.pathname === '/v1/projects' && request.method === 'GET') return json(response, 200, options.storage.listProjects())
       if (url.pathname === '/v1/projects' && request.method === 'POST') return json(response, 201, options.storage.createProject(await body(request, options.maxBodyBytes ?? 1_000_000) as Parameters<WebStorage['createProject']>[0]))
-      if (segments[0] === 'v1' && segments[1] === 'projects' && segments.length === 3 && request.method === 'DELETE') return json(response, options.storage.removeProject(segments[2]) ? 200 : 404, { ok: true })
+      if (segments[0] === 'v1' && segments[1] === 'projects' && segments.length === 3 && request.method === 'PATCH') return json(response, 200, options.storage.updateProject({ ...(await body(request, options.maxBodyBytes ?? 1_000_000)), id: segments[2] } as Parameters<WebStorage['updateProject']>[0]))
+      if (segments[0] === 'v1' && segments[1] === 'projects' && segments.length === 3 && request.method === 'DELETE') {
+        const removed = options.storage.removeProject(segments[2])
+        return json(response, removed ? 200 : 409, removed ? { ok: true } : { ok: false, error: 'Workspace still has agents' })
+      }
       if (segments[0] === 'v1' && segments[1] === 'projects' && segments[3] === 'active' && request.method === 'POST') return json(response, options.storage.setActiveProject(segments[2]) ? 200 : 404, options.storage.activeProject())
 
       if (segments[0] === 'v1' && segments[1] === 'projects' && segments[2] && segments[3]) {

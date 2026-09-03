@@ -72,6 +72,7 @@ export function createWebOfficeApi(baseUrl: string, token: string): OfficeApi {
       return project
     },
     createProject: (project: { id: string; name: string; path: string; useWorktrees: boolean }) => request<Project>('/v1/projects', json('POST', project)),
+    updateProject: (project: { id: string; name: string; path: string; useWorktrees: boolean }) => request<Project>(`/v1/projects/${encodeURIComponent(project.id)}`, json('PATCH', project)),
     setActiveProject: async (id: string) => {
       const project = await request<Project>(`/v1/projects/${encodeURIComponent(id)}/active`, json('POST', {}))
       subscribedProjectId = project.id

@@ -24,6 +24,7 @@ declare global {
       listDirectories(path?:string): Promise<DirectoryListing>
       activeProject(): Promise<Project|null>
       createProject(project: { id:string; name:string; path:string; useWorktrees:boolean }): Promise<Project>
+      updateProject(project: { id:string; name:string; path:string; useWorktrees:boolean }): Promise<Project>
       setActiveProject(id:string): Promise<Project>
       removeProject(id:string): Promise<boolean>
       listTasks(projectId?:string): Promise<Task[]>

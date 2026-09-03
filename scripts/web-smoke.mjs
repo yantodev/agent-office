@@ -8,6 +8,8 @@ import { createLocalWorkerRuntime } from '../src/web/worker.ts'
 
 const storage = {
   listProjects: () => [{ id: 'project-1', name: 'Smoke' }],
+  updateProject: input => ({ ...input, defaultBranch: 'main', useWorktrees: input.useWorktrees ? 1 : 0 }),
+  removeProject: () => true,
   listTasks: projectId => [{ projectId, id: 'task-1' }],
   listEvents: () => [],
   listMessages: () => [],
@@ -74,6 +76,10 @@ try {
   const directories = await fetch(`${base}/v1/directories?path=${encodeURIComponent(staticDir)}`, { headers: { authorization: 'Bearer smoke-token' } })
   assert.equal(directories.status, 200)
   assert.equal((await directories.json()).path, staticDir)
+  const updatedProject = await fetch(`${base}/v1/projects/project-1`, { method: 'PATCH', headers: { authorization: 'Bearer smoke-token', 'content-type': 'application/json' }, body: JSON.stringify({ name: 'Updated', path: staticDir, useWorktrees: false }) })
+  assert.equal(updatedProject.status, 200)
+  assert.equal((await updatedProject.json()).path, staticDir)
+  assert.equal((await fetch(`${base}/v1/projects/project-1`, { method: 'DELETE', headers: { authorization: 'Bearer smoke-token' } })).status, 200)
   assert.equal((await fetch(`${base}/v1/projects`)).status, 401)
   const response = await fetch(`${base}/v1/projects`, { headers: { authorization: 'Bearer smoke-token' } })
   assert.deepEqual(await response.json(), [{ id: 'project-1', name: 'Smoke' }])

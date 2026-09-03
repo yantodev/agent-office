@@ -516,6 +516,21 @@ function registerIpc() {
     return getProject(input.id)
   })
 
+  ipcMain.handle('projects:update', (_event, input: { id: string; name: string; path: string; useWorktrees: boolean }) => {
+    const current = getProject(input.id)
+    if (!current) throw new Error('Project not found')
+    const path = resolve(input.path)
+    if (!isDirectory(path)) throw new Error('Workspace path does not exist or is not a directory')
+    const worktreeAgent = db.prepare('SELECT 1 FROM agents WHERE project_id=? AND worktree_path IS NOT NULL LIMIT 1').get(input.id)
+    if (worktreeAgent && path !== current.path) throw new Error('Workspace path cannot change while worktree agents exist')
+    const branch = gitBranch(path) ?? 'HEAD'
+    db.transaction(() => {
+      db.prepare('UPDATE projects SET name=?, path=?, default_branch=?, use_worktrees=? WHERE id=?').run(input.name.trim() || basename(path), path, branch, input.useWorktrees ? 1 : 0, input.id)
+      if (!worktreeAgent && path !== current.path) db.prepare('UPDATE agents SET cwd=? WHERE project_id=? AND cwd=?').run(path, input.id, current.path)
+    })()
+    return getProject(input.id)
+  })
+
   ipcMain.handle('projects:set-active', (_event, id: string) => {
     if (!getProject(id)) throw new Error('Project not found')
     db.prepare("INSERT INTO settings (key, value) VALUES ('active_project_id', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").run(id)

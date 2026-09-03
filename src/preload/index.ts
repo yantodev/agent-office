@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld('office', {
   listDirectories: (path?: string) => ipcRenderer.invoke('directories:list', path),
   activeProject: () => ipcRenderer.invoke('projects:active'),
   createProject: (project: unknown) => ipcRenderer.invoke('projects:create', project),
+  updateProject: (project: unknown) => ipcRenderer.invoke('projects:update', project),
   setActiveProject: (id: string) => ipcRenderer.invoke('projects:set-active', id),
   removeProject: (id: string) => ipcRenderer.invoke('projects:remove', id),
   listTasks: (projectId?: string) => ipcRenderer.invoke('tasks:list', projectId),

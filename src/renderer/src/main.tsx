@@ -357,9 +357,16 @@ function AgentsCenter({ agents, profiles, active, profileDraft, editingProfileId
   </section>
 }
 
-function WorkspacesCenter({ projects, activeProject, projectDraft, onDraftChange, onCreate, onSelect }: { projects: Project[]; activeProject: Project | null; projectDraft: { name: string; path: string; useWorktrees: boolean }; onDraftChange: (draft: { name: string; path: string; useWorktrees: boolean }) => void; onCreate: (event: React.FormEvent<HTMLFormElement>) => void; onSelect: (id: string) => void }) {
+function DirectoryPicker({ listing, onBrowse, onChoose, onCancel }: { listing: DirectoryListing; onBrowse: (path?: string) => void; onChoose: () => void; onCancel: () => void }) {
+  return <div className="directory-picker" role="dialog" aria-label="Choose workspace folder"><div className="directory-picker-head"><strong>{listing.path}</strong><button type="button" onClick={() => onBrowse(listing.parentPath ?? undefined)} disabled={!listing.parentPath}>Up</button></div><div className="directory-list">{listing.directories.length ? listing.directories.map(directory => <button type="button" key={directory.path} onClick={() => onBrowse(directory.path)}>{directory.name}</button>) : <span className="muted">No subdirectories</span>}</div><div className="directory-picker-actions"><button className="save-profile" type="button" onClick={onChoose}>Use this folder</button><button type="button" className="link-button" onClick={onCancel}>Cancel</button></div></div>
+}
+
+function WorkspacesCenter({ projects, activeProject, projectDraft, onDraftChange, onCreate, onSelect, onUpdate, onRemove }: { projects: Project[]; activeProject: Project | null; projectDraft: { name: string; path: string; useWorktrees: boolean }; onDraftChange: (draft: { name: string; path: string; useWorktrees: boolean }) => void; onCreate: (event: React.FormEvent<HTMLFormElement>) => void; onSelect: (id: string) => void; onUpdate: (project: { id: string; name: string; path: string; useWorktrees: boolean }) => Promise<void>; onRemove: (project: Project) => Promise<void> }) {
   const [picker, setPicker] = useState<DirectoryListing | null>(null)
+  const [pickerTarget, setPickerTarget] = useState<'new' | 'edit' | null>(null)
   const [pickerError, setPickerError] = useState('')
+  const [editing, setEditing] = useState<Project | null>(null)
+  const [editDraft, setEditDraft] = useState({ name: '', path: '', useWorktrees: false })
 
   async function browse(path?: string) {
     try {
@@ -370,15 +377,36 @@ function WorkspacesCenter({ projects, activeProject, projectDraft, onDraftChange
     }
   }
 
+  async function openPicker(target: 'new' | 'edit', path?: string) {
+    setPickerTarget(target)
+    await browse(path)
+  }
+
   function chooseCurrentDirectory() {
     if (!picker) return
-    onDraftChange({ ...projectDraft, path: picker.path })
+    if (pickerTarget === 'edit') setEditDraft(value => ({ ...value, path: picker.path }))
+    else onDraftChange({ ...projectDraft, path: picker.path })
     setPicker(null)
+    setPickerTarget(null)
+  }
+
+  function beginEdit(project: Project) {
+    setEditing(project)
+    setEditDraft({ name: project.name, path: project.path, useWorktrees: Boolean(project.useWorktrees) })
+    setPicker(null)
+    setPickerTarget(null)
+  }
+
+  async function saveEdit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!editing || !editDraft.path) return
+    await onUpdate({ id: editing.id, ...editDraft })
+    setEditing(null)
   }
 
   return <section className="workspaces-center">
     <div className="command-header"><div><h2>Workspaces</h2><p>Project root, Git worktree, dan konteks agent.</p></div><span className="task-count">{projects.length} projects</span></div>
-    <div className="workspace-manager-grid"><form className="panel-card project-form" onSubmit={onCreate}><h3>Add workspace</h3><input aria-label="Workspace name" placeholder="Project name (optional)" value={projectDraft.name} onChange={event => onDraftChange({ ...projectDraft, name: event.target.value })} /><div className="directory-field"><button className="save-profile" type="button" onClick={() => void browse()}>Choose folder</button>{projectDraft.path ? <code title={projectDraft.path}>{projectDraft.path}</code> : <span className="muted">No folder selected</span>}</div>{pickerError && <small className="picker-error" role="alert">{pickerError}</small>}{picker && <div className="directory-picker" role="dialog" aria-label="Choose workspace folder"><div className="directory-picker-head"><strong>{picker.path}</strong><button type="button" onClick={() => void browse(picker.parentPath ?? undefined)} disabled={!picker.parentPath}>Up</button></div><div className="directory-list">{picker.directories.length ? picker.directories.map(directory => <button type="button" key={directory.path} onClick={() => void browse(directory.path)}>{directory.name}</button>) : <span className="muted">No subdirectories</span>}</div><div className="directory-picker-actions"><button className="save-profile" type="button" onClick={chooseCurrentDirectory}>Use this folder</button><button type="button" className="link-button" onClick={() => setPicker(null)}>Cancel</button></div></div>}<label className="checkbox-row"><input type="checkbox" checked={projectDraft.useWorktrees} onChange={event => onDraftChange({ ...projectDraft, useWorktrees: event.target.checked })} /> One Git worktree per agent</label><button className="save-profile" type="submit" disabled={!projectDraft.path}>Add workspace</button></form><div className="panel-card workspace-list-panel"><h3>Available workspaces</h3><div className="workspace-list">{projects.length === 0 ? <p className="muted">No workspace configured.</p> : projects.map(project => <button className={`workspace-row ${activeProject?.id === project.id ? 'active' : ''}`} key={project.id} onClick={() => onSelect(project.id)}><span><strong>{project.name}</strong><small>{project.path}</small></span><em>{activeProject?.id === project.id ? 'Active' : project.useWorktrees ? 'Worktrees' : 'Shared folder'}</em></button>)}</div></div></div>
+    <div className="workspace-manager-grid"><form className="panel-card project-form" onSubmit={onCreate}><h3>Add workspace</h3><input aria-label="Workspace name" placeholder="Project name (optional)" value={projectDraft.name} onChange={event => onDraftChange({ ...projectDraft, name: event.target.value })} /><div className="directory-field"><button className="save-profile" type="button" onClick={() => void openPicker('new')}>Choose folder</button>{projectDraft.path ? <code title={projectDraft.path}>{projectDraft.path}</code> : <span className="muted">No folder selected</span>}</div>{pickerError && pickerTarget === 'new' && <small className="picker-error" role="alert">{pickerError}</small>}{picker && pickerTarget === 'new' && <DirectoryPicker listing={picker} onBrowse={path => void browse(path)} onChoose={chooseCurrentDirectory} onCancel={() => { setPicker(null); setPickerTarget(null) }} />}<label className="checkbox-row"><input type="checkbox" checked={projectDraft.useWorktrees} onChange={event => onDraftChange({ ...projectDraft, useWorktrees: event.target.checked })} /> One Git worktree per agent</label><button className="save-profile" type="submit" disabled={!projectDraft.path}>Add workspace</button></form><div className="panel-card workspace-list-panel"><h3>Available workspaces</h3>{editing && <form className="project-form workspace-edit-form" onSubmit={saveEdit}><input aria-label="Edit workspace name" placeholder="Project name" value={editDraft.name} onChange={event => setEditDraft({ ...editDraft, name: event.target.value })} /><div className="directory-field"><button className="save-profile" type="button" onClick={() => void openPicker('edit', editDraft.path)}>Choose folder</button><code title={editDraft.path}>{editDraft.path}</code></div>{pickerError && pickerTarget === 'edit' && <small className="picker-error" role="alert">{pickerError}</small>}{picker && pickerTarget === 'edit' && <DirectoryPicker listing={picker} onBrowse={path => void browse(path)} onChoose={chooseCurrentDirectory} onCancel={() => { setPicker(null); setPickerTarget(null) }} />}<label className="checkbox-row"><input type="checkbox" checked={editDraft.useWorktrees} onChange={event => setEditDraft({ ...editDraft, useWorktrees: event.target.checked })} /> One Git worktree per agent</label><div className="directory-picker-actions"><button className="save-profile" type="submit" disabled={!editDraft.path}>Save changes</button><button type="button" className="link-button" onClick={() => setEditing(null)}>Cancel</button></div></form>}<div className="workspace-list">{projects.length === 0 ? <p className="muted">No workspace configured.</p> : projects.map(project => <div className={`workspace-row ${activeProject?.id === project.id ? 'active' : ''}`} key={project.id}><button className="workspace-row-main" type="button" onClick={() => onSelect(project.id)}><span><strong>{project.name}</strong><small>{project.path}</small></span><em>{activeProject?.id === project.id ? 'Active' : project.useWorktrees ? 'Worktrees' : 'Shared folder'}</em></button><div className="workspace-actions"><button type="button" onClick={() => beginEdit(project)}>Edit</button><button type="button" onClick={() => void onRemove(project)}>Delete</button></div></div>)}</div></div></div>
   </section>
 }
 
@@ -494,6 +522,30 @@ export function App() {
     await refresh()
   }
 
+  async function updateWorkspace(input: { id: string; name: string; path: string; useWorktrees: boolean }) {
+    try {
+      await window.office.updateProject(input)
+      await refresh()
+    } catch (error) {
+      setRendererError(errorMessage(error))
+    }
+  }
+
+  async function deleteWorkspace(project: Project) {
+    if (!window.confirm(`Delete workspace ${project.name}?`)) return
+    try {
+      const removed = await window.office.removeProject(project.id)
+      if (!removed) {
+        setRendererError('Workspace tidak dapat dihapus karena masih memiliki agent.')
+        return
+      }
+      if (activeProject?.id === project.id) setActiveId(null)
+      await refresh()
+    } catch (error) {
+      setRendererError(errorMessage(error))
+    }
+  }
+
   async function saveProfile(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!profileDraft.name.trim() || !profileDraft.role.trim() || !profileDraft.command.trim()) return
@@ -588,7 +640,7 @@ export function App() {
 
       {rendererError && <div className="renderer-feedback" role="alert"><span>{rendererError}</span><button type="button" onClick={() => setRendererError('')}>Dismiss</button></div>}
 
-      {view === 'dashboard' ? <DashboardCenter project={activeProject} agents={agents} fleet={fleet} onSelect={id => { setActiveId(id); setCommitLocked(false) }} /> : view === 'agents' ? <AgentsCenter agents={agents} profiles={profiles} active={active} profileDraft={profileDraft} editingProfileId={editingProfileId} onSelect={id => { setActiveId(id); setCommitLocked(false) }} onStart={start} onStop={stop} onHire={addAgent} onProfileDraftChange={setProfileDraft} onSaveProfile={saveProfile} onEditProfile={editProfile} onRemoveProfile={removeProfile} onCancelProfile={() => { setEditingProfileId(null); setProfileDraft(emptyProfile) }} /> : view === 'workspaces' ? <WorkspacesCenter projects={projects} activeProject={activeProject} projectDraft={projectDraft} onDraftChange={setProjectDraft} onCreate={createProject} onSelect={selectProject} /> : view === 'inbox' ? <InboxCenter project={activeProject} agents={agents} /> : view === 'github' ? <GithubCenter project={activeProject} /> : view === 'command' ? <CommandCenter project={activeProject} agents={agents} /> : view === 'memory' ? <MemoryCenter project={activeProject} agents={agents} /> : view === 'settings' ? <SettingsCenter project={activeProject} /> : <><section className="workspace">
+      {view === 'dashboard' ? <DashboardCenter project={activeProject} agents={agents} fleet={fleet} onSelect={id => { setActiveId(id); setCommitLocked(false) }} /> : view === 'agents' ? <AgentsCenter agents={agents} profiles={profiles} active={active} profileDraft={profileDraft} editingProfileId={editingProfileId} onSelect={id => { setActiveId(id); setCommitLocked(false) }} onStart={start} onStop={stop} onHire={addAgent} onProfileDraftChange={setProfileDraft} onSaveProfile={saveProfile} onEditProfile={editProfile} onRemoveProfile={removeProfile} onCancelProfile={() => { setEditingProfileId(null); setProfileDraft(emptyProfile) }} /> : view === 'workspaces' ? <WorkspacesCenter projects={projects} activeProject={activeProject} projectDraft={projectDraft} onDraftChange={setProjectDraft} onCreate={createProject} onSelect={selectProject} onUpdate={updateWorkspace} onRemove={deleteWorkspace} /> : view === 'inbox' ? <InboxCenter project={activeProject} agents={agents} /> : view === 'github' ? <GithubCenter project={activeProject} /> : view === 'command' ? <CommandCenter project={activeProject} agents={agents} /> : view === 'memory' ? <MemoryCenter project={activeProject} agents={agents} /> : view === 'settings' ? <SettingsCenter project={activeProject} /> : <><section className="workspace">
         <div className="floor-card">
           {agents.length === 0 ? <div className="floor-grid"><div className="empty-state"><h2>Your office is empty</h2><p>Add an agent from a profile to create the first worker.</p></div></div> : <OfficeFloor agents={agents} projectId={activeProject?.id} onSelect={id => { setActiveId(id); setCommitLocked(false) }} />}
           {/* CSS floor remains the empty state so the app stays useful before the first agent is hired. */}
