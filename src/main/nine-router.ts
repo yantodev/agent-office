@@ -1,4 +1,5 @@
 import { providerAdapter } from './provider-adapters'
+import { redactSecrets } from './security'
 
 export const DEFAULT_NINEROUTER_BASE_URL = 'http://127.0.0.1:20128/v1'
 
@@ -10,6 +11,7 @@ export type NineRouterConfig = {
 }
 
 export type NineRouterHealthStatus = 'disabled' | 'healthy' | 'unauthorized' | 'rate-limited' | 'invalid' | 'unreachable' | 'error'
+export type NineRouterErrorCode = 'authentication' | 'rate_limit' | 'timeout' | 'routing' | 'network'
 
 export type NineRouterHealth = {
   enabled: boolean
@@ -21,6 +23,7 @@ export type NineRouterHealth = {
   model?: string
   latencyMs: number | null
   checkedAt: string
+  errorCode?: NineRouterErrorCode
   error?: string
 }
 
@@ -40,7 +43,7 @@ function normalizeBaseUrl(value: string) {
 
 function safeHealthError(error: unknown) {
   const message = error instanceof Error ? error.message : 'Unable to reach 9router'
-  return message.slice(0, 240)
+  return redactSecrets(message).slice(0, 240)
 }
 
 export function readNineRouterConfig(environment: Record<string, string | undefined>): NineRouterConfig {
@@ -137,13 +140,14 @@ export async function checkNineRouter(
     if (config.apiKey) headers.authorization = `Bearer ${config.apiKey}`
     const response = await request(`${config.baseUrl}/models`, { method: 'GET', headers, signal: controller.signal })
     const latencyMs = Date.now() - startedAt
-    if (response.status === 401 || response.status === 403) return { ...base, status: 'unauthorized', reachable: true, latencyMs, error: '9router rejected the API key' }
-    if (response.status === 429) return { ...base, status: 'rate-limited', reachable: true, latencyMs, error: '9router rate limit exceeded' }
+    if (response.status === 401 || response.status === 403) return { ...base, status: 'unauthorized', reachable: true, latencyMs, errorCode: 'authentication', error: '9router rejected the API key' }
+    if (response.status === 429) return { ...base, status: 'rate-limited', reachable: true, latencyMs, errorCode: 'rate_limit', error: '9router rate limit exceeded' }
     if (response.ok) return { ...base, status: 'healthy', reachable: true, latencyMs }
-    return { ...base, status: 'error', reachable: true, latencyMs, error: `9router returned HTTP ${response.status}` }
+    return { ...base, status: 'error', reachable: true, latencyMs, errorCode: 'routing', error: `9router returned HTTP ${response.status}` }
   } catch (error) {
-    const message = error instanceof Error && error.name === 'AbortError' ? '9router health check timed out' : safeHealthError(error)
-    return { ...base, status: 'unreachable', reachable: false, latencyMs: Date.now() - startedAt, error: message }
+    const timedOut = error instanceof Error && error.name === 'AbortError'
+    const message = timedOut ? '9router health check timed out' : safeHealthError(error)
+    return { ...base, status: 'unreachable', reachable: false, latencyMs: Date.now() - startedAt, errorCode: timedOut ? 'timeout' : 'network', error: message }
   } finally {
     clearTimeout(timeout)
   }

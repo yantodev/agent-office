@@ -374,7 +374,7 @@ function SettingsCenter({ project }: { project: Project | null }) {
       <label htmlFor="nine-router-url">Base URL</label><input id="nine-router-url" type="url" required value={routerBaseUrl} onChange={event => setRouterBaseUrl(event.target.value)} />
       <label htmlFor="nine-router-model">Model route</label><input id="nine-router-model" placeholder="provider/model (optional)" value={routerModel} onChange={event => setRouterModel(event.target.value)} />
       <label htmlFor="nine-router-key">API key</label><input id="nine-router-key" type="password" autoComplete="off" placeholder={routerHealth?.apiKeyConfigured ? 'Saved key (leave blank to keep)' : 'Paste 9router API key'} value={routerApiKey} onChange={event => setRouterApiKey(event.target.value)} />
-      <small className="muted">Health: {routerHealth?.reachable ? `reachable in ${routerHealth.latencyMs ?? 0} ms` : 'not reachable'}{routerHealth?.error ? ` · ${routerHealth.error}` : ''}. Key tidak ditampilkan kembali.</small>
+      <small className="muted">Health: {routerHealth?.reachable ? `reachable in ${routerHealth.latencyMs ?? 0} ms` : 'not reachable'}{routerHealth?.errorCode ? ` · ${routerHealth.errorCode}` : ''}{routerHealth?.error ? ` · ${routerHealth.error}` : ''}. Key tidak ditampilkan kembali.</small>
       <div className="profile-actions"><button className="save-profile" type="submit">Save gateway</button><button type="button" onClick={() => void refreshRouter(true)}>Test connection</button></div>
       {routerNotice && <small className="muted">{routerNotice}</small>}
     </form>

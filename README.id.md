@@ -87,7 +87,8 @@ AGENT_OFFICE_9ROUTER_MODEL=provider/model
 
 Bridge memetakan command Codex/OpenAI-compatible ke variable `OPENAI_*` dan command Claude ke variable
 `ANTHROPIC_*`. Biarkan `AGENT_OFFICE_9ROUTER_ENABLED=0` jika ingin memakai routing provider langsung. Endpoint harus
-menggunakan `http://` atau `https://` dan tidak boleh berisi credential pada URL.
+menggunakan `http://` atau `https://` dan tidak boleh berisi credential pada URL. Indikator health membedakan kegagalan
+authentication, rate limit, timeout, routing, dan network.
 
 ## Tech stack
 

@@ -124,6 +124,14 @@ test('9router health check reports safe connection states without exposing the A
   const unauthorized = await checkNineRouter({ AGENT_OFFICE_9ROUTER_ENABLED: '1' }, async () => new Response('', { status: 401 }))
   assert.equal(unauthorized.status, 'unauthorized')
   assert.equal(unauthorized.reachable, true)
+  assert.equal(unauthorized.errorCode, 'authentication')
+
+  const limited = await checkNineRouter({ AGENT_OFFICE_9ROUTER_ENABLED: '1' }, async () => new Response('', { status: 429 }))
+  assert.equal(limited.errorCode, 'rate_limit')
+  const routing = await checkNineRouter({ AGENT_OFFICE_9ROUTER_ENABLED: '1' }, async () => new Response('', { status: 502 }))
+  assert.equal(routing.errorCode, 'routing')
+  const timeout = await checkNineRouter({ AGENT_OFFICE_9ROUTER_ENABLED: '1' }, async () => { const error = new Error('request aborted'); error.name = 'AbortError'; throw error })
+  assert.equal(timeout.errorCode, 'timeout')
 })
 
 test('atomic persistence leaves valid JSON after concurrent writes', async () => {

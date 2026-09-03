@@ -89,7 +89,8 @@ AGENT_OFFICE_9ROUTER_MODEL=provider/model
 
 The bridge maps Codex/OpenAI-compatible commands to `OPENAI_*` variables and Claude commands to `ANTHROPIC_*`
 variables. Keep `AGENT_OFFICE_9ROUTER_ENABLED=0` when direct provider routing is preferred. The endpoint must use
-`http://` or `https://` and must not contain credentials in the URL.
+`http://` or `https://` and must not contain credentials in the URL. The health indicator distinguishes authentication,
+rate-limit, timeout, routing, and network failures.
 
 ## Tech stack
 
