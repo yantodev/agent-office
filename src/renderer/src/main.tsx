@@ -116,7 +116,7 @@ function CommandCenter({ project, agents }: { project: Project | null; agents: A
     setApprovals(nextApprovals)
     setGithub(nextGithub)
   }
-  useVisiblePolling(refreshCoordination, 3000, [project?.id])
+  useVisiblePolling(refreshCoordination, 8000, [project?.id])
 
   async function createTask(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -254,7 +254,7 @@ function MemoryCenter({ project, agents }: { project: Project | null; agents: Ag
   const [editingId, setEditingId] = useState<string | undefined>()
 
   const refreshMemories = () => project ? (semantic ? window.office.semanticSearchMemories({ projectId: project.id, query }).then(setMemories) : window.office.listMemories({ projectId: project.id, query }).then(setMemories)) : Promise.resolve()
-  useVisiblePolling(refreshMemories, 5000, [project?.id, query, semantic])
+  useVisiblePolling(refreshMemories, 10000, [project?.id, query, semantic])
 
   async function saveMemory(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -305,7 +305,7 @@ function SettingsCenter({ project }: { project: Project | null }) {
   const [notice, setNotice] = useState('')
   const refresh = () => project ? window.office.listApprovals(project.id).then(setApprovals) : Promise.resolve()
   useEffect(() => { setDiff(''); setNotice('') }, [project?.id])
-  useVisiblePolling(refresh, 5000, [project?.id])
+  useVisiblePolling(refresh, 10000, [project?.id])
 
   async function prepare(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -420,7 +420,7 @@ function InboxCenter({ project, agents }: { project: Project | null; agents: Age
   const [toAgent, setToAgent] = useState('')
   const [body, setBody] = useState('')
   const refresh = () => project ? Promise.all([window.office.listMessages(project.id), window.office.listEvents(project.id)]).then(([nextMessages, nextEvents]) => { setMessages(nextMessages); setEvents(nextEvents) }) : Promise.resolve()
-  useVisiblePolling(refresh, 3000, [project?.id])
+  useVisiblePolling(refresh, 8000, [project?.id])
   async function send(event: React.FormEvent<HTMLFormElement>) { event.preventDefault(); if (!project || !fromAgent || !toAgent || !body.trim()) return; await window.office.sendMessage({ projectId: project.id, fromAgent, toAgent, body }); setBody(''); await refresh() }
   return <section className="inbox-center"><div className="command-header"><div><h2>Inbox / Activity</h2><p>{project ? `Mailbox dan event log untuk ${project.name}.` : 'Select a workspace first.'}</p></div><span className="task-count">{messages.length} messages</span></div><div className="coordination-grid"><div className="panel-card"><div className="panel-title"><h3>Send message</h3><span>Durable mailbox</span></div><form className="message-form" onSubmit={send}><select aria-label="Message sender" value={fromAgent} onChange={event => setFromAgent(event.target.value)}><option value="">From agent</option>{agents.map(agent => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select><select aria-label="Message recipient" value={toAgent} onChange={event => setToAgent(event.target.value)}><option value="">To agent</option>{agents.filter(agent => agent.id !== fromAgent).map(agent => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select><textarea aria-label="Message body" placeholder="Write a message to another agent" rows={4} value={body} onChange={event => setBody(event.target.value)} /><button className="save-profile" type="submit">Send message</button></form><div className="message-list">{messages.slice(0, 20).map(message => <div className="message-row" key={message.id}><strong>{message.fromName ?? message.fromAgent} → {message.toName ?? message.toAgent}</strong><p>{message.body}</p><small>{new Date(message.createdAt).toLocaleString()}</small></div>)}</div></div><div className="panel-card"><div className="panel-title"><h3>Activity log</h3><span>{events.length} events</span></div><div className="event-list">{events.slice(0, 30).map(event => <div className="event-row" key={event.id}><code>{event.type}</code><span>{new Date(event.createdAt).toLocaleTimeString()}</span></div>)}</div></div></div></section>
 }
@@ -435,7 +435,7 @@ function GithubCenter({ project }: { project: Project | null }) {
     }
     setStatus(await window.office.githubStatus(project.id))
   }
-  useVisiblePolling(refreshStatus, 10000, [project?.id])
+  useVisiblePolling(refreshStatus, 20000, [project?.id])
   async function syncIssues() { if (!project || !status.authenticated) return; const imported = await window.office.importGithubIssues(project.id); setMessage(`${imported.length} open issue(s) synchronized as tasks.`) }
   return <section className="github-center"><div className="command-header"><div><h2>GitHub</h2><p>Hubungkan issue repository ke task lokal dengan approval gate.</p></div><span className={`github-status ${status.authenticated ? 'ready' : ''}`}>{status.authenticated ? 'Authenticated' : status.installed ? 'Login required' : 'gh missing'}</span></div><div className="github-overview-grid"><div className="panel-card"><h3>Connection</h3><div className="integration-state"><span className={status.installed ? 'state-ok' : 'state-muted'}>{status.installed ? '●' : '○'} GitHub CLI installed</span><span className={status.authenticated ? 'state-ok' : 'state-muted'}>{status.authenticated ? '●' : '○'} Account authenticated</span></div><button className="save-profile" type="button" onClick={syncIssues} disabled={!project || !status.authenticated}>Sync open issues</button>{message && <small className="muted">{message}</small>}</div><div className="panel-card"><h3>Safety rules</h3><p className="muted">Issue import membuat task durable. Push dan pembuatan pull request tetap membutuhkan approval manusia.</p><div className="github-flow"><span>Issue</span><b>→</b><span>Task</span><b>→</b><span>Agent</span><b>→</b><span>Review</span></div></div></div></section>
 }
@@ -486,7 +486,7 @@ export function App() {
     setFleet(await window.office.fleetSummary(nextActiveProject?.id))
   }
 
-  useVisiblePolling(refresh, 4000, [])
+  useVisiblePolling(refresh, 8000, [])
 
   useEffect(() => {
     void window.office.detectCli().then(setClis)

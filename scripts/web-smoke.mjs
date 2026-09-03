@@ -25,6 +25,7 @@ const storage = {
 const staticDir = await mkdtemp(join(tmpdir(), 'agent-office-web-smoke-'))
 await writeFile(join(staticDir, 'index.html'), '<!doctype html><title>Agent Office</title>')
 const app = createWebServer({ storage, token: 'smoke-token', staticDir })
+const limitedApp = createWebServer({ storage, token: 'smoke-token', rateLimit: { maxRequests: 1, windowMs: 60_000 } })
 const worker = createLocalWorkerRuntime()
 let webSocketClient
 let workerSession
@@ -70,6 +71,9 @@ try {
   await new Promise(resolve => app.server.listen(0, '127.0.0.1', resolve))
   const address = app.server.address()
   const base = `http://127.0.0.1:${address.port}`
+  await new Promise(resolve => limitedApp.server.listen(0, '127.0.0.1', resolve))
+  const limitedAddress = limitedApp.server.address()
+  const limitedBase = `http://127.0.0.1:${limitedAddress.port}`
   assert.equal((await fetch(`${base}/`)).status, 200)
   assert.match(await (await fetch(`${base}/`)).text(), /Agent Office/)
   assert.equal((await fetch(`${base}/healthz`)).status, 200)
@@ -86,6 +90,10 @@ try {
   const tasks = await fetch(`${base}/v1/projects/project-1/tasks`, { headers: { authorization: 'Bearer smoke-token' } })
   assert.deepEqual(await tasks.json(), [{ projectId: 'project-1', id: 'task-1' }])
   assert.equal((await fetch(`${base}/v1/cli`, { headers: { authorization: 'Bearer smoke-token' } })).status, 200)
+  assert.equal((await fetch(`${limitedBase}/v1/projects`, { headers: { authorization: 'Bearer smoke-token' } })).status, 200)
+  const limitedResponse = await fetch(`${limitedBase}/v1/projects`, { headers: { authorization: 'Bearer smoke-token' } })
+  assert.equal(limitedResponse.status, 429)
+  assert.equal(limitedResponse.headers.get('retry-after'), '60')
   assert.throws(() => worker.start({
     id: 'missing-cwd-smoke',
     command: 'printf should-not-run',
@@ -132,5 +140,10 @@ try {
   workerSession?.stop()
   webSocketClient?.destroy()
   await closeServer()
+  await new Promise(resolve => {
+    limitedApp.server.closeAllConnections?.()
+    limitedApp.server.closeIdleConnections?.()
+    limitedApp.server.close(() => resolve())
+  })
   await rm(staticDir, { recursive: true, force: true })
 }

@@ -167,13 +167,19 @@ export function OfficeFloor({ agents, projectId, onSelect }: OfficeFloorProps) {
     let animation: ((ticker: { deltaMS: number }) => void) | undefined
 
     const boot = async () => {
+      let messages: Message[] = []
+      let tasks: Task[] = []
       try {
-        const [messages, tasks] = projectId
-          ? await Promise.all([window.office.listMessages(projectId), window.office.listTasks(projectId)])
-          : [[], []] as [Message[], Task[]]
-        if (cancelled || !host.current) return
+        if (projectId) [messages, tasks] = await Promise.all([window.office.listMessages(projectId), window.office.listTasks(projectId)])
+      } catch {
+        // Data API yang gagal tidak boleh mengaktifkan fallback Pixi.
+        // Lantai tetap dapat digambar dengan status agent terakhir yang tersedia.
+      }
+      if (cancelled || !host.current) return
 
-        const nextApplication = new Application()
+      let nextApplication: Application | undefined
+      try {
+        nextApplication = new Application()
         await nextApplication.init({
           antialias: false,
           backgroundColor: colors.floorA,
@@ -348,6 +354,7 @@ export function OfficeFloor({ agents, projectId, onSelect }: OfficeFloorProps) {
         resizeObserver.observe(host.current)
       } catch {
         if (!cancelled) {
+          nextApplication?.destroy({ removeView: true }, { children: true, texture: true, textureSource: true })
           if (initialized) application?.destroy({ removeView: true }, { children: true, texture: true, textureSource: true })
           setFallback(true)
         }

@@ -13,6 +13,7 @@ type WebServerOptions = {
   staticDir?: string
   worker?: WorkerRuntime
   userDataPath?: string
+  rateLimit?: { maxRequests?: number; windowMs?: number }
 }
 type WebSocketClient = { socket: import('node:stream').Duplex; projectId?: string }
 
@@ -132,6 +133,8 @@ export function createWebServer(options: WebServerOptions) {
   const clients = new Set<WebSocketClient>()
   const sessions = new Map<string, WorkerSession>()
   const rateWindows = new Map<string, { startedAt: number; count: number }>()
+  const rateLimitMaxRequests = options.rateLimit?.maxRequests ?? 300
+  const rateLimitWindowMs = options.rateLimit?.windowMs ?? 60_000
 
   const broadcast = (event: { projectId?: string; type: string; [key: string]: unknown }) => {
     const payload = frame(event)
@@ -172,8 +175,12 @@ export function createWebServer(options: WebServerOptions) {
       const rateKey = request.socket.remoteAddress || 'unknown'
       const now = Date.now()
       const rate = rateWindows.get(rateKey)
-      if (!rate || now - rate.startedAt >= 60_000) rateWindows.set(rateKey, { startedAt: now, count: 1 })
-      else if (rate.count >= 120) return json(response, 429, { error: 'Rate limit exceeded' })
+      if (!rate || now - rate.startedAt >= rateLimitWindowMs) rateWindows.set(rateKey, { startedAt: now, count: 1 })
+      else if (rate.count >= rateLimitMaxRequests) {
+        const retryAfter = Math.max(1, Math.ceil((rate.startedAt + rateLimitWindowMs - now) / 1_000))
+        response.setHeader('retry-after', String(retryAfter))
+        return json(response, 429, { error: 'Rate limit exceeded', retryAfter })
+      }
       else rate.count += 1
 
       if (url.pathname === '/v1/directories' && request.method === 'GET') {

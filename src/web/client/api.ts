@@ -18,7 +18,14 @@ export function createWebOfficeApi(baseUrl: string, token: string): OfficeApi {
       headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json', ...(init.headers ?? {}) },
     })
     const payload = await response.json().catch(() => ({})) as T & { error?: string }
-    if (!response.ok) throw new Error(payload.error || `Web API request failed (${response.status})`)
+    if (!response.ok) {
+      if (response.status === 429) {
+        const retryAfter = Number(response.headers.get('retry-after') ?? (payload as { retryAfter?: number }).retryAfter)
+        const wait = Number.isFinite(retryAfter) && retryAfter > 0 ? ` Coba lagi dalam ${retryAfter} detik.` : ' Coba lagi beberapa saat lagi.'
+        throw new Error(`${payload.error || 'Rate limit exceeded.'}${wait}`)
+      }
+      throw new Error(payload.error || `Web API request failed (${response.status})`)
+    }
     return payload as T
   }
 
