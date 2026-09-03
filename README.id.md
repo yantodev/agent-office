@@ -81,7 +81,9 @@ AGENT_OFFICE_9ROUTER_API_KEY=api-key-9router-anda
 AGENT_OFFICE_9ROUTER_MODEL=provider/model
 ```
 
-3. Restart Agent Office atau web worker setelah mengubah `.env`.
+3. Restart Agent Office atau web worker setelah mengubah `.env`. Pada halaman Settings & Safety, konfigurasi gateway
+   juga dapat disimpan dan diuji; Electron menyimpannya di settings lokal, sedangkan server browser menyimpan perubahan
+   dari UI di memory sampai server direstart.
 
 Bridge memetakan command Codex/OpenAI-compatible ke variable `OPENAI_*` dan command Claude ke variable
 `ANTHROPIC_*`. Biarkan `AGENT_OFFICE_9ROUTER_ENABLED=0` jika ingin memakai routing provider langsung. Endpoint harus

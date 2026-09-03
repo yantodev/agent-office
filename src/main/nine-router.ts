@@ -24,6 +24,13 @@ export type NineRouterHealth = {
   error?: string
 }
 
+export type NineRouterSettingsInput = {
+  enabled: boolean
+  baseUrl: string
+  model?: string
+  apiKey?: string | null
+}
+
 function normalizeBaseUrl(value: string) {
   const url = new URL(value)
   if (!['http:', 'https:'].includes(url.protocol)) throw new Error('9router endpoint must use HTTP or HTTPS')
@@ -46,6 +53,24 @@ export function readNineRouterConfig(environment: Record<string, string | undefi
     apiKey: environment.AGENT_OFFICE_9ROUTER_API_KEY?.trim() || undefined,
     model: environment.AGENT_OFFICE_9ROUTER_MODEL?.trim() || undefined,
   }
+}
+
+export function mergeNineRouterEnvironment(
+  current: Record<string, string | undefined>,
+  input: NineRouterSettingsInput,
+) {
+  const baseUrl = normalizeBaseUrl(input.baseUrl.trim())
+  if (baseUrl.length > 2_048) throw new Error('9router endpoint is too long')
+  if (input.model && input.model.trim().length > 200) throw new Error('9router model is too long')
+  if (input.apiKey && input.apiKey.trim().length > 2_000) throw new Error('9router API key is too long')
+  const next: Record<string, string | undefined> = {
+    ...current,
+    AGENT_OFFICE_9ROUTER_ENABLED: input.enabled ? '1' : '0',
+    AGENT_OFFICE_9ROUTER_BASE_URL: baseUrl,
+    AGENT_OFFICE_9ROUTER_MODEL: input.model?.trim() || '',
+  }
+  if (input.apiKey?.trim()) next.AGENT_OFFICE_9ROUTER_API_KEY = input.apiKey.trim()
+  return next
 }
 
 /**
@@ -89,7 +114,7 @@ export async function checkNineRouter(
   const checkedAt = new Date().toISOString()
   const base = {
     enabled: config.enabled,
-    configured: Boolean(config.apiKey),
+    configured: config.enabled,
     apiKeyConfigured: Boolean(config.apiKey),
     baseUrl: config.baseUrl,
     model: config.model,
@@ -101,7 +126,7 @@ export async function checkNineRouter(
   try {
     normalizeBaseUrl(config.baseUrl)
   } catch (error) {
-    return { ...base, status: 'invalid', reachable: false, error: safeHealthError(error) }
+    return { ...base, configured: false, status: 'invalid', reachable: false, error: safeHealthError(error) }
   }
 
   const controller = new AbortController()

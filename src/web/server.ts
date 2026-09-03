@@ -6,7 +6,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import type { WebStorage } from './storage.ts'
 import type { WorkerRuntime, WorkerSession } from './worker.ts'
 import { appendTerminalOutput, clearAllTerminalOutputs, clearTerminalOutput, readTerminalOutput } from '../main/terminal-buffer-store.ts'
-import { checkNineRouter } from '../main/nine-router.ts'
+import { checkNineRouter, mergeNineRouterEnvironment, type NineRouterSettingsInput } from '../main/nine-router.ts'
 
 type WebServerOptions = {
   storage: WebStorage
@@ -135,6 +135,7 @@ function listDirectories(requestedPath?: string) {
 export function createWebServer(options: WebServerOptions) {
   const clients = new Set<WebSocketClient>()
   const sessions = new Map<string, WorkerSession>()
+  let nineRouterEnvironment = { ...(options.nineRouterEnvironment ?? process.env) } as Record<string, string | undefined>
   const rateWindows = new Map<string, { startedAt: number; count: number }>()
   const rateLimitMaxRequests = options.rateLimit?.maxRequests ?? 300
   const rateLimitWindowMs = options.rateLimit?.windowMs ?? 60_000
@@ -161,7 +162,7 @@ export function createWebServer(options: WebServerOptions) {
     const agent = options.storage.getAgent(agentId)
     if (!agent) throw new Error('Agent not found')
     const profile = agent.profileId ? options.storage.listProfiles().find(value => (value as { id?: string }).id === agent.profileId) as { permissions?: Record<string, boolean> } | undefined : undefined
-    const session = options.worker.start({ id: agentId, command: agent.command, cwd: agent.cwd, userDataPath: options.userDataPath ?? '.agent-office-web', permissions: { filesystem: true, network: true, git: true, ...profile?.permissions } })
+    const session = options.worker.start({ id: agentId, command: agent.command, cwd: agent.cwd, userDataPath: options.userDataPath ?? '.agent-office-web', permissions: { filesystem: true, network: true, git: true, ...profile?.permissions }, environment: nineRouterEnvironment as Record<string, string> })
     sessions.set(agentId, session)
     options.storage.setAgentStatus(agentId, 'working')
     if (agent.projectId) broadcast({ projectId: agent.projectId, type: 'agent.state', agentId, status: 'working' })
@@ -199,7 +200,13 @@ export function createWebServer(options: WebServerOptions) {
       else rate.count += 1
 
       if (url.pathname === '/v1/integrations/9router/health' && request.method === 'GET') {
-        return json(response, 200, await checkNineRouter(options.nineRouterEnvironment ?? process.env))
+        return json(response, 200, await checkNineRouter(nineRouterEnvironment))
+      }
+      if (url.pathname === '/v1/integrations/9router/config' && request.method === 'POST') {
+        const input = await body(request, options.maxBodyBytes ?? 1_000_000) as unknown as NineRouterSettingsInput
+        if (!input || typeof input.enabled !== 'boolean' || typeof input.baseUrl !== 'string') return json(response, 400, { error: 'Invalid 9router configuration' })
+        nineRouterEnvironment = mergeNineRouterEnvironment(nineRouterEnvironment, input)
+        return json(response, 200, await checkNineRouter(nineRouterEnvironment))
       }
 
       if (url.pathname === '/v1/directories' && request.method === 'GET') {

@@ -96,7 +96,7 @@ Roadmap ini disusun dari percakapan pada [ChatGPT share](https://chatgpt.com/sha
 - [x] Petakan konfigurasi gateway ke environment OpenAI-compatible dan Claude-compatible.
 - [x] Pastikan secret filtering tetap berlaku dan API key tidak dikirim ke renderer/browser.
 - [x] Tambahkan health check/status koneksi 9router melalui IPC Electron dan endpoint web.
-- [ ] Tambahkan UI Settings untuk konfigurasi dan test connection.
+- [x] Tambahkan UI Settings untuk konfigurasi dan test connection.
 - [ ] Tambahkan error mapping untuk authentication, rate limit, timeout, dan routing failure.
 - [ ] Tambahkan end-to-end test dengan 9router aktif.
 - [ ] Dokumentasikan troubleshooting dan finalisasi integrasi.

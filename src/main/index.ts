@@ -18,7 +18,7 @@ import { interruptAgent, spawnAgentSession, submitAgentPrompt } from './agent-se
 import { summarizeExecutionUsage } from './telemetry'
 import { githubCli } from './github'
 import { appendTerminalOutput, clearAllTerminalOutputs, clearTerminalOutput, readTerminalOutput } from './terminal-buffer-store'
-import { checkNineRouter } from './nine-router'
+import { checkNineRouter, mergeNineRouterEnvironment, type NineRouterSettingsInput } from './nine-router'
 
 type AgentStatus = 'idle' | 'working' | 'paused' | 'error' | 'offline'
 
@@ -108,6 +108,7 @@ let db: Database.Database
 let mailboxRouter: NodeJS.Timeout | undefined
 let scheduler: NodeJS.Timeout | undefined
 let quitting = false
+const nineRouterSettingsKey = 'nine_router_config'
 
 if (process.env.ELECTRON_DISABLE_GPU === '1') {
   app.disableHardwareAcceleration()
@@ -132,6 +133,19 @@ function normalizePermissions(value: unknown): ProfilePermissions {
 
 function parsePermissions(value?: string): ProfilePermissions {
   try { return normalizePermissions(value ? JSON.parse(value) : {}) } catch { return { ...defaultProfilePermissions } }
+}
+
+function nineRouterEnvironment() {
+  const environment = { ...process.env } as Record<string, string | undefined>
+  const row = db?.prepare('SELECT value FROM settings WHERE key=?').get(nineRouterSettingsKey) as { value?: string } | undefined
+  if (!row?.value) return environment
+  try {
+    const saved = JSON.parse(row.value) as Record<string, unknown>
+    for (const key of ['AGENT_OFFICE_9ROUTER_ENABLED', 'AGENT_OFFICE_9ROUTER_BASE_URL', 'AGENT_OFFICE_9ROUTER_API_KEY', 'AGENT_OFFICE_9ROUTER_MODEL']) {
+      if (typeof saved[key] === 'string') environment[key] = saved[key] as string
+    }
+  } catch { /* konfigurasi rusak diabaikan dan environment digunakan */ }
+  return environment
 }
 
 function projectConfigRoots(project: Project) {
@@ -828,7 +842,14 @@ function registerIpc() {
     }
   })
 
-  ipcMain.handle('nine-router:health', () => checkNineRouter(process.env))
+  ipcMain.handle('nine-router:health', () => checkNineRouter(nineRouterEnvironment()))
+  ipcMain.handle('nine-router:configure', (_event, input: NineRouterSettingsInput) => {
+    if (!input || typeof input.enabled !== 'boolean' || typeof input.baseUrl !== 'string') throw new Error('Invalid 9router configuration')
+    const merged = mergeNineRouterEnvironment(nineRouterEnvironment(), input)
+    const saved = Object.fromEntries(Object.entries(merged).filter(([key]) => key.startsWith('AGENT_OFFICE_9ROUTER_')))
+    db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(nineRouterSettingsKey, JSON.stringify(saved))
+    return checkNineRouter(merged)
+  })
 
   ipcMain.handle('github:import-issues', (_event, projectId?: string) => {
     const project = getProject(projectId ?? getActiveProject()?.id ?? '')
@@ -1219,7 +1240,7 @@ function registerIpc() {
       }
       recordEvent(project, storedAgent.id, 'task.started', { taskId })
     }
-    const environment = { ...process.env } as Record<string, string>
+    const environment = nineRouterEnvironment() as Record<string, string>
     if (!permissions.secrets) {
       for (const key of Object.keys(environment)) {
         if (/(?:TOKEN|KEY|SECRET|PASSWORD|CREDENTIAL)/i.test(key)) delete environment[key]

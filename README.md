@@ -83,7 +83,9 @@ AGENT_OFFICE_9ROUTER_API_KEY=your-9router-api-key
 AGENT_OFFICE_9ROUTER_MODEL=provider/model
 ```
 
-3. Restart Agent Office or the web worker after changing `.env`.
+3. Restart Agent Office or the web worker after changing `.env`. In the Settings & Safety screen, you can also save the
+   gateway configuration and test the connection; Electron stores that configuration in its local settings, while the
+   browser server keeps UI changes in memory until restart.
 
 The bridge maps Codex/OpenAI-compatible commands to `OPENAI_*` variables and Claude commands to `ANTHROPIC_*`
 variables. Keep `AGENT_OFFICE_9ROUTER_ENABLED=0` when direct provider routing is preferred. The endpoint must use

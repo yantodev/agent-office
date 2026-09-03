@@ -304,9 +304,31 @@ function SettingsCenter({ project }: { project: Project | null }) {
   const [diff, setDiff] = useState('')
   const [approvals, setApprovals] = useState<Approval[]>([])
   const [notice, setNotice] = useState('')
+  const [routerHealth, setRouterHealth] = useState<NineRouterHealth | null>(null)
+  const [routerEnabled, setRouterEnabled] = useState(false)
+  const [routerBaseUrl, setRouterBaseUrl] = useState('http://127.0.0.1:20128/v1')
+  const [routerModel, setRouterModel] = useState('')
+  const [routerApiKey, setRouterApiKey] = useState('')
+  const [routerNotice, setRouterNotice] = useState('')
+  const [routerDraftLoaded, setRouterDraftLoaded] = useState(false)
   const refresh = () => project ? window.office.listApprovals(project.id).then(setApprovals) : Promise.resolve()
-  useEffect(() => { setDiff(''); setNotice('') }, [project?.id])
+  async function refreshRouter(loadDraft = false) {
+    try {
+      const health = await window.office.nineRouterHealth()
+      setRouterHealth(health)
+      if (loadDraft || !routerDraftLoaded) {
+        setRouterEnabled(health.enabled)
+        setRouterBaseUrl(health.baseUrl)
+        setRouterModel(health.model ?? '')
+        setRouterDraftLoaded(true)
+      }
+    } catch (error) {
+      setRouterNotice(errorMessage(error))
+    }
+  }
+  useEffect(() => { setDiff(''); setNotice(''); setRouterNotice(''); setRouterDraftLoaded(false); void refreshRouter(true) }, [project?.id])
   useVisiblePolling(refresh, 10000, [project?.id])
+  useVisiblePolling(() => refreshRouter(), 15000, [])
 
   async function prepare(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -328,9 +350,34 @@ function SettingsCenter({ project }: { project: Project | null }) {
     await refresh()
   }
 
+  async function saveRouter(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setRouterNotice('')
+    try {
+      const health = await window.office.configureNineRouter({ enabled: routerEnabled, baseUrl: routerBaseUrl, model: routerModel, ...(routerApiKey.trim() ? { apiKey: routerApiKey.trim() } : {}) })
+      setRouterHealth(health)
+      setRouterApiKey('')
+      setRouterNotice('9router configuration saved for this server. API key is hidden after saving.')
+    } catch (error) {
+      setRouterNotice(errorMessage(error))
+    }
+  }
+
+  const routerLabel = routerHealth?.status === 'healthy' ? 'Connected' : routerHealth?.status === 'disabled' ? 'Disabled' : routerHealth?.status ?? 'Checking'
+
   return <section className="settings-center">
-    <div className="command-header"><div><h2>Settings & safety</h2><p>{project ? 'Preview and approve CLI configuration changes.' : 'Select a workspace first.'}</p></div></div>
+    <div className="command-header"><div><h2>Settings & safety</h2><p>{project ? 'Configure integrations and approve CLI configuration changes.' : 'Select a workspace first.'}</p></div></div>
     <div className="settings-layout">
+    <form className="panel-card profile-form" onSubmit={saveRouter}>
+      <div className="panel-title"><h3>9router gateway</h3><span className={`integration-status ${routerHealth?.status === 'healthy' ? 'ready' : ''}`}>{routerLabel}</span></div>
+      <label className="checkbox-row"><input type="checkbox" checked={routerEnabled} onChange={event => setRouterEnabled(event.target.checked)} /> Enable 9router for new agent sessions</label>
+      <label htmlFor="nine-router-url">Base URL</label><input id="nine-router-url" type="url" required value={routerBaseUrl} onChange={event => setRouterBaseUrl(event.target.value)} />
+      <label htmlFor="nine-router-model">Model route</label><input id="nine-router-model" placeholder="provider/model (optional)" value={routerModel} onChange={event => setRouterModel(event.target.value)} />
+      <label htmlFor="nine-router-key">API key</label><input id="nine-router-key" type="password" autoComplete="off" placeholder={routerHealth?.apiKeyConfigured ? 'Saved key (leave blank to keep)' : 'Paste 9router API key'} value={routerApiKey} onChange={event => setRouterApiKey(event.target.value)} />
+      <small className="muted">Health: {routerHealth?.reachable ? `reachable in ${routerHealth.latencyMs ?? 0} ms` : 'not reachable'}{routerHealth?.error ? ` · ${routerHealth.error}` : ''}. Key tidak ditampilkan kembali.</small>
+      <div className="profile-actions"><button className="save-profile" type="submit">Save gateway</button><button type="button" onClick={() => void refreshRouter(true)}>Test connection</button></div>
+      {routerNotice && <small className="muted">{routerNotice}</small>}
+    </form>
     <form className="panel-card profile-form" onSubmit={prepare}><h3>CLI config change</h3><input aria-label="CLI config path" placeholder="Absolute CLI config path" required value={configPath} onChange={event => setConfigPath(event.target.value)} /><textarea aria-label="CLI config content" placeholder="Proposed complete file content" rows={14} required value={configContent} onChange={event => setConfigContent(event.target.value)} /><small className="muted">The current file is backed up before replacement. Secret values are redacted in the diff and event log.</small><button className="save-profile" type="submit" disabled={!project}>Preview & request approval</button>{diff && <pre className="config-diff">{diff}</pre>}{notice && <small className="muted">{notice}</small>}</form>
       <div className="panel-card"><div className="panel-title"><h3>Config approvals</h3><span>{approvals.filter(approval => approval.type === 'config-change' && approval.status === 'pending').length} pending</span></div><div className="approval-list">{approvals.filter(approval => approval.type === 'config-change').map(approval => <div className="approval-row" key={approval.id}><strong>{approval.title}</strong><p>{approval.reason}</p>{approval.status === 'pending' && <div className="profile-actions"><button onClick={() => resolve(approval, 'approved')}>Approve</button><button onClick={() => resolve(approval, 'rejected')}>Reject</button></div>}{approval.status === 'approved' && <button onClick={() => apply(approval)}>Apply backed-up change</button>}</div>)}</div></div>
     </div>

@@ -46,6 +46,7 @@ declare global {
       fleetSummary(projectId?:string): Promise<FleetSummary|null>
       githubStatus(projectId?:string): Promise<{ installed:boolean; authenticated:boolean }>
       nineRouterHealth(): Promise<NineRouterHealth>
+      configureNineRouter(config: { enabled:boolean; baseUrl:string; model?:string; apiKey?:string }): Promise<NineRouterHealth>
       importGithubIssues(projectId?:string): Promise<Array<{ issueNumber:number; taskId:string; created:boolean }>>
       prepareGithubPr(input: { taskId:string; title?:string; body?:string }): Promise<{ approvalId:string; diffStat:string }>
       createGithubPr(approvalId:string): Promise<{ url:string }>

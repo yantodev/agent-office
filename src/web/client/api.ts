@@ -105,6 +105,7 @@ export function createWebOfficeApi(baseUrl: string, token: string): OfficeApi {
     fleetSummary: (projectId?: string) => request<FleetSummary | null>(`/v1/fleet${projectId ? `?projectId=${encodeURIComponent(projectId)}` : ''}`),
     githubStatus: () => request<{ installed: boolean; authenticated: boolean }>('/v1/github/status'),
     nineRouterHealth: () => request<NineRouterHealth>('/v1/integrations/9router/health'),
+    configureNineRouter: (config: Parameters<OfficeApi['configureNineRouter']>[0]) => request<NineRouterHealth>('/v1/integrations/9router/config', json('POST', config)),
     importGithubIssues: () => request<Array<{ issueNumber: number; taskId: string; created: boolean }>>('/v1/github/import-issues', json('POST', {})),
     prepareGithubPr: () => Promise.reject(new Error('GitHub PR preparation requires the Electron local Git adapter')),
     createGithubPr: () => Promise.reject(new Error('GitHub PR creation requires the Electron local Git adapter')),
